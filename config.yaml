@@ -1,0 +1,28 @@
+name: "Serial TCP Proxy"
+description: "TCP proxy for Serial-to-TCP converters (EW11, etc.) with multi-client support and packet logging"
+version: "1.0.0"
+slug: "serial_tcp_proxy"
+arch:
+  - aarch64
+  - armv7
+  - amd64
+  - i386
+init: false
+homeassistant_api: false
+host_network: true
+
+options:
+  upstream_host: "192.168.0.100"
+  upstream_port: 8899
+  listen_port: 18899
+  max_clients: 10
+  log_packets: false
+  log_file: "/data/packets.log"
+
+schema:
+  upstream_host: str
+  upstream_port: port
+  listen_port: port
+  max_clients: int(1,100)
+  log_packets: bool
+  log_file: str
