@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -216,6 +217,9 @@ func (ps *Server) IsUpstreamConnected() bool {
 	return ps.upstream.IsConnected()
 }
 
+// ErrInvalidTarget is returned when an invalid target is specified for packet injection
+var ErrInvalidTarget = fmt.Errorf("invalid target: must be 'upstream' or 'downstream'")
+
 // InjectPacket injects a packet to the specified target (upstream or downstream)
 func (ps *Server) InjectPacket(target string, data []byte) error {
 	if target == "upstream" {
@@ -231,5 +235,5 @@ func (ps *Server) InjectPacket(target string, data []byte) error {
 		ps.clients.Broadcast(data)
 		return nil
 	}
-	return nil
+	return ErrInvalidTarget
 }

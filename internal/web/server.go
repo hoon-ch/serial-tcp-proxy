@@ -89,6 +89,11 @@ func (s *Server) Stop() {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	status := s.proxy.GetStatus()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(status); err != nil {
@@ -96,14 +101,45 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// PublicConfig contains only non-sensitive configuration fields for API exposure
+type PublicConfig struct {
+	UpstreamHost string `json:"upstream_host"`
+	UpstreamPort int    `json:"upstream_port"`
+	ListenPort   int    `json:"listen_port"`
+	MaxClients   int    `json:"max_clients"`
+	LogPackets   bool   `json:"log_packets"`
+	WebPort      int    `json:"web_port"`
+}
+
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	publicConfig := PublicConfig{
+		UpstreamHost: s.config.UpstreamHost,
+		UpstreamPort: s.config.UpstreamPort,
+		ListenPort:   s.config.ListenPort,
+		MaxClients:   s.config.MaxClients,
+		LogPackets:   s.config.LogPackets,
+		WebPort:      s.config.WebPort,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(s.config); err != nil {
+	if err := json.NewEncoder(w).Encode(publicConfig); err != nil {
 		s.logger.Error("Failed to encode config: %v", err)
 	}
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	// Check if Flusher is supported
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
 	// Set headers for SSE
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -127,9 +163,10 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Send initial status
-	statusData, _ := json.Marshal(s.proxy.GetStatus())
-	fmt.Fprintf(w, "event: status\ndata: %s\n\n", statusData)
-	w.(http.Flusher).Flush()
+	if statusData, err := json.Marshal(s.proxy.GetStatus()); err == nil {
+		fmt.Fprintf(w, "event: status\ndata: %s\n\n", statusData)
+	}
+	flusher.Flush()
 
 	// Send buffered logs
 	s.logBufferMu.Lock()
@@ -137,7 +174,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "event: log\ndata: %s\n\n", msg)
 	}
 	s.logBufferMu.Unlock()
-	w.(http.Flusher).Flush()
+	flusher.Flush()
 
 	// Periodic status update ticker
 	ticker := time.NewTicker(2 * time.Second)
@@ -147,11 +184,12 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		select {
 		case msg := <-clientChan:
 			fmt.Fprintf(w, "event: log\ndata: %s\n\n", msg)
-			w.(http.Flusher).Flush()
+			flusher.Flush()
 		case <-ticker.C:
-			statusData, _ := json.Marshal(s.proxy.GetStatus())
-			fmt.Fprintf(w, "event: status\ndata: %s\n\n", statusData)
-			w.(http.Flusher).Flush()
+			if statusData, err := json.Marshal(s.proxy.GetStatus()); err == nil {
+				fmt.Fprintf(w, "event: status\ndata: %s\n\n", statusData)
+			}
+			flusher.Flush()
 		case <-r.Context().Done():
 			return
 		}
@@ -220,5 +258,9 @@ func (s *Server) handleInject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
+		s.logger.Error("Failed to encode inject response: %v", err)
+	}
 }
