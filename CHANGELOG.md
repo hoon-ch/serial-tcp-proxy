@@ -14,7 +14,8 @@ All notable changes to this project will be documented in this file.
   - Packet injection feature for testing (upstream/downstream)
   - Packet export functionality
   - Dark/Light theme support
-- New environment variable `WEB_PORT` for configuring Web UI port (default: 8080)
+- New environment variable `WEB_PORT` for configuring Web UI port (default: 18080)
+- Home Assistant Add-on Ingress support for sidebar panel access
 - Logger callback support for real-time log streaming
 - Packet injection API endpoint (`POST /api/inject`)
 - Server uptime tracking

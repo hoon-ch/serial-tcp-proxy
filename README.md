@@ -102,7 +102,7 @@ docker run -d \
 | `MAX_CLIENTS` | Maximum simultaneous clients | 10 |
 | `LOG_PACKETS` | Enable packet logging | false |
 | `LOG_FILE` | Packet log file path | /data/packets.log |
-| `WEB_PORT` | Web UI port | 8080 |
+| `WEB_PORT` | Web UI port | 18080 |
 
 ## Log Format
 
@@ -126,7 +126,9 @@ docker run -d \
 
 The proxy includes a built-in web interface for monitoring and debugging.
 
-Access at `http://localhost:8080` (or configured WEB_PORT).
+Access at `http://localhost:18080` (or configured WEB_PORT).
+
+When running as a Home Assistant Add-on, the Web UI is accessible via Ingress (sidebar panel).
 
 ### Features
 

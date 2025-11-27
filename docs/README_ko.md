@@ -102,7 +102,7 @@ docker run -d \
 | `MAX_CLIENTS` | 최대 동시 클라이언트 수 | 10 |
 | `LOG_PACKETS` | 패킷 로깅 활성화 | false |
 | `LOG_FILE` | 패킷 로그 파일 경로 | /data/packets.log |
-| `WEB_PORT` | Web UI 포트 | 8080 |
+| `WEB_PORT` | Web UI 포트 | 18080 |
 
 ## 로그 형식
 
@@ -126,7 +126,9 @@ docker run -d \
 
 프록시에는 모니터링 및 디버깅을 위한 내장 웹 인터페이스가 포함되어 있습니다.
 
-`http://localhost:8080` (또는 설정된 WEB_PORT)로 접속하세요.
+`http://localhost:18080` (또는 설정된 WEB_PORT)로 접속하세요.
+
+Home Assistant Add-on으로 실행 시, Ingress를 통해 사이드바 패널에서 Web UI에 접근할 수 있습니다.
 
 ### 기능
 
