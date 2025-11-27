@@ -27,6 +27,7 @@ type Logger struct {
 	logPackets  bool
 	flushTicker *time.Ticker
 	done        chan struct{}
+	logCallback func(string)
 }
 
 func New(logPackets bool, logFile string) (*Logger, error) {
@@ -94,6 +95,10 @@ func (l *Logger) log(level LogLevel, format string, args ...interface{}) {
 	defer l.mu.Unlock()
 
 	fmt.Fprint(l.stdWriter, line)
+
+	if l.logCallback != nil {
+		l.logCallback(line)
+	}
 }
 
 func (l *Logger) Info(format string, args ...interface{}) {
@@ -109,7 +114,8 @@ func (l *Logger) Error(format string, args ...interface{}) {
 }
 
 func (l *Logger) LogPacket(direction string, data []byte, source string) {
-	if !l.logPackets {
+	// If neither packet logging nor callback is enabled, return early
+	if !l.logPackets && l.logCallback == nil {
 		return
 	}
 
@@ -139,10 +145,18 @@ func (l *Logger) LogPacket(direction string, data []byte, source string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	fmt.Fprint(l.stdWriter, line)
+	// Only write to stdout/file if enabled
+	if l.logPackets {
+		fmt.Fprint(l.stdWriter, line)
 
-	if l.fileWriter != nil {
-		_, _ = l.fileWriter.WriteString(line)
+		if l.fileWriter != nil {
+			_, _ = l.fileWriter.WriteString(line)
+		}
+	}
+
+	// Always send to callback if exists
+	if l.logCallback != nil {
+		l.logCallback(line)
 	}
 }
 
@@ -156,4 +170,11 @@ func (l *Logger) SetOutput(w io.Writer) {
 // IsPacketLoggingEnabled returns whether packet logging is enabled
 func (l *Logger) IsPacketLoggingEnabled() bool {
 	return l.logPackets
+}
+
+// SetLogCallback sets a callback function that receives all log entries
+func (l *Logger) SetLogCallback(cb func(string)) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.logCallback = cb
 }
