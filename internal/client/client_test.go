@@ -158,7 +158,7 @@ func TestManager_GetAll(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		conn := newMockConn()
-		cm.Add(conn)
+		_, _ = cm.Add(conn)
 	}
 
 	clients := cm.GetAll()
@@ -174,7 +174,7 @@ func TestManager_Broadcast(t *testing.T) {
 	conns := make([]*mockConn, 3)
 	for i := 0; i < 3; i++ {
 		conns[i] = newMockConn()
-		cm.Add(conns[i])
+		_, _ = cm.Add(conns[i])
 	}
 
 	data := []byte{0xf7, 0x0e, 0x1f}
@@ -194,7 +194,7 @@ func TestManager_CloseAll(t *testing.T) {
 	conns := make([]*mockConn, 3)
 	for i := 0; i < 3; i++ {
 		conns[i] = newMockConn()
-		cm.Add(conns[i])
+		_, _ = cm.Add(conns[i])
 	}
 
 	cm.CloseAll()

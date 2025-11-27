@@ -142,7 +142,7 @@ func (l *Logger) LogPacket(direction string, data []byte, source string) {
 	fmt.Fprint(l.stdWriter, line)
 
 	if l.fileWriter != nil {
-		l.fileWriter.WriteString(line)
+		_, _ = l.fileWriter.WriteString(line)
 	}
 }
 

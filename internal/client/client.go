@@ -101,9 +101,9 @@ func (cm *Manager) Broadcast(data []byte) {
 
 	for _, client := range clients {
 		// Set write deadline to prevent blocking on slow clients
-		client.Conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
+		_ = client.Conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 		_, err := client.Conn.Write(data)
-		client.Conn.SetWriteDeadline(time.Time{})
+		_ = client.Conn.SetWriteDeadline(time.Time{})
 
 		if err != nil {
 			cm.logger.Warn("Failed to write to %s [%s]: %v", client.Addr, client.ID, err)

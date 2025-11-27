@@ -39,12 +39,12 @@ func TestServer_Integration(t *testing.T) {
 
 		// Send some test data to proxy
 		testData := []byte{0xf7, 0x0e, 0x1f, 0x01}
-		conn.Write(testData)
+		_, _ = conn.Write(testData)
 
 		// Read client data
 		buf := make([]byte, 1024)
-		conn.SetReadDeadline(time.Now().Add(time.Second))
-		conn.Read(buf)
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+		_, _ = conn.Read(buf)
 	}()
 
 	// Create proxy server config
@@ -85,7 +85,7 @@ func TestServer_Integration(t *testing.T) {
 	defer client.Close()
 
 	// Wait for data from upstream through proxy
-	client.SetReadDeadline(time.Now().Add(time.Second))
+	_ = client.SetReadDeadline(time.Now().Add(time.Second))
 	buf := make([]byte, 1024)
 	n, err := client.Read(buf)
 	if err != nil {
@@ -101,7 +101,7 @@ func TestServer_Integration(t *testing.T) {
 
 	// Send data from client to upstream
 	clientData := []byte{0xf7, 0x12, 0x01}
-	client.Write(clientData)
+	_, _ = client.Write(clientData)
 
 	time.Sleep(100 * time.Millisecond)
 }
@@ -142,7 +142,7 @@ func TestServer_MultipleClients(t *testing.T) {
 
 	log := newTestLogger()
 	proxy := NewServer(cfg, log)
-	proxy.Start()
+	_ = proxy.Start()
 	defer proxy.Stop()
 
 	time.Sleep(100 * time.Millisecond)
@@ -169,7 +169,7 @@ func TestServer_MultipleClients(t *testing.T) {
 	upstreamMu.Lock()
 	if upstreamConn != nil {
 		testData := []byte{0xf7, 0x0e, 0x1f}
-		upstreamConn.Write(testData)
+		_, _ = upstreamConn.Write(testData)
 	}
 	upstreamMu.Unlock()
 
@@ -177,7 +177,7 @@ func TestServer_MultipleClients(t *testing.T) {
 
 	// All clients should receive the data
 	for i, client := range clients {
-		client.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		_ = client.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 		buf := make([]byte, 1024)
 		n, err := client.Read(buf)
 		if err == nil && n > 0 {

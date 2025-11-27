@@ -53,7 +53,7 @@ func BenchmarkLatency(b *testing.B) {
 					if err != nil {
 						return
 					}
-					c.Write(buf[:n])
+					_, _ = c.Write(buf[:n])
 				}
 			}(conn)
 		}
@@ -106,7 +106,7 @@ func BenchmarkLatency(b *testing.B) {
 		}
 
 		// Receive echoed packet
-		client.SetReadDeadline(time.Now().Add(time.Second))
+		_ = client.SetReadDeadline(time.Now().Add(time.Second))
 		_, err = client.Read(recvBuf)
 		if err != nil {
 			b.Fatalf("Read failed: %v", err)
@@ -290,8 +290,8 @@ func benchmarkBroadcast(b *testing.B, numClients int) {
 			go func(c net.Conn) {
 				defer wg.Done()
 				buf := make([]byte, 1024)
-				c.SetReadDeadline(time.Now().Add(time.Second))
-				c.Read(buf)
+				_ = c.SetReadDeadline(time.Now().Add(time.Second))
+				_, _ = c.Read(buf)
 			}(client)
 		}
 		wg.Wait()
@@ -324,7 +324,7 @@ func BenchmarkMemoryAllocation(b *testing.B) {
 					if err != nil {
 						return
 					}
-					c.Write(buf[:n])
+					_, _ = c.Write(buf[:n])
 				}
 			}(conn)
 		}
@@ -366,9 +366,9 @@ func BenchmarkMemoryAllocation(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		client.Write(testPacket)
-		client.SetReadDeadline(time.Now().Add(time.Second))
-		client.Read(recvBuf)
+		_, _ = client.Write(testPacket)
+		_ = client.SetReadDeadline(time.Now().Add(time.Second))
+		_, _ = client.Read(recvBuf)
 	}
 }
 

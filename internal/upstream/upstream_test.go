@@ -93,7 +93,7 @@ func TestConnection_ConnectAndReceive(t *testing.T) {
 			return
 		}
 		defer c.Close()
-		c.Write([]byte{0xf7, 0x0e, 0x1f})
+		_, _ = c.Write([]byte{0xf7, 0x0e, 0x1f})
 		time.Sleep(100 * time.Millisecond)
 	}()
 
@@ -120,6 +120,7 @@ func TestConnection_Reconnect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start mock server: %v", err)
 	}
+	defer listener.Close()
 	addr := listener.Addr().String()
 
 	log := newTestLogger()
@@ -127,41 +128,73 @@ func TestConnection_Reconnect(t *testing.T) {
 
 	// Accept first connection then close it
 	var serverConn net.Conn
+	var mu sync.Mutex
+	connReady := make(chan struct{})
 	go func() {
-		serverConn, _ = listener.Accept()
+		c, _ := listener.Accept()
+		mu.Lock()
+		serverConn = c
+		mu.Unlock()
+		close(connReady)
 	}()
 
 	conn.Start()
 	defer conn.Stop()
 
-	// Wait for first connection
-	time.Sleep(100 * time.Millisecond)
+	// Wait for first connection from server side
+	select {
+	case <-connReady:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for first connection")
+	}
+
+	// Wait for client side to be connected
+	for i := 0; i < 20; i++ {
+		if conn.IsConnected() {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 
 	if !conn.IsConnected() {
 		t.Error("Expected first connection to be established")
 	}
 
 	// Close server connection to trigger reconnect
+	mu.Lock()
 	if serverConn != nil {
 		serverConn.Close()
 	}
+	mu.Unlock()
 
-	// Wait for disconnect detection
-	time.Sleep(100 * time.Millisecond)
+	// Wait for disconnect detection and reconnect attempt
+	time.Sleep(200 * time.Millisecond)
 
 	// Accept reconnection
+	reconnectReady := make(chan struct{})
 	go func() {
-		listener.Accept()
+		_, _ = listener.Accept()
+		close(reconnectReady)
 	}()
 
 	// Wait for reconnection (backoff is 1 second minimum)
-	time.Sleep(1200 * time.Millisecond)
+	select {
+	case <-reconnectReady:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Timeout waiting for reconnection")
+	}
+
+	// Wait for client state to update
+	for i := 0; i < 20; i++ {
+		if conn.IsConnected() {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 
 	if !conn.IsConnected() {
 		t.Error("Expected reconnection to be established")
 	}
-
-	listener.Close()
 }
 
 func TestConnection_Write(t *testing.T) {
@@ -184,7 +217,7 @@ func TestConnection_Write(t *testing.T) {
 		defer c.Close()
 
 		buf := make([]byte, 1024)
-		c.SetReadDeadline(time.Now().Add(time.Second))
+		_ = c.SetReadDeadline(time.Now().Add(time.Second))
 		n, _ := c.Read(buf)
 		receivedData = buf[:n]
 	}()

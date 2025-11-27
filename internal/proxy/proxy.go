@@ -121,7 +121,7 @@ func (ps *Server) acceptLoop() {
 		}
 
 		// Set accept deadline to allow checking context
-		ps.listener.(*net.TCPListener).SetDeadline(time.Now().Add(time.Second))
+		_ = ps.listener.(*net.TCPListener).SetDeadline(time.Now().Add(time.Second))
 
 		conn, err := ps.listener.Accept()
 		if err != nil {
@@ -166,7 +166,7 @@ func (ps *Server) handleClient(cl *client.Client) {
 		}
 
 		// Set read deadline
-		cl.Conn.SetReadDeadline(time.Now().Add(time.Minute))
+		_ = cl.Conn.SetReadDeadline(time.Now().Add(time.Minute))
 
 		n, err := cl.Conn.Read(buf)
 		if err != nil {

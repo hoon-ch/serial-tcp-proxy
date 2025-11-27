@@ -174,7 +174,7 @@ func (u *Connection) readLoop(conn net.Conn) {
 		default:
 		}
 
-		conn.SetReadDeadline(time.Now().Add(time.Minute))
+		_ = conn.SetReadDeadline(time.Now().Add(time.Minute))
 		n, err := conn.Read(buf)
 		if err != nil {
 			if u.GetState() != StateStopped {
@@ -207,9 +207,9 @@ func (u *Connection) Write(data []byte) error {
 		return net.ErrClosed
 	}
 
-	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	_, err := conn.Write(data)
-	conn.SetWriteDeadline(time.Time{})
+	_ = conn.SetWriteDeadline(time.Time{})
 
 	return err
 }
