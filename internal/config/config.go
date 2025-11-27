@@ -15,6 +15,7 @@ type Config struct {
 	MaxClients     int           `json:"max_clients"`
 	LogPackets     bool          `json:"log_packets"`
 	LogFile        string        `json:"log_file"`
+	WebPort        int           `json:"web_port"`
 	ReconnectDelay time.Duration `json:"-"`
 }
 
@@ -25,6 +26,7 @@ func Load() (*Config, error) {
 		MaxClients:     10,
 		LogPackets:     false,
 		LogFile:        "/data/packets.log",
+		WebPort:        18080,
 		ReconnectDelay: time.Second,
 	}
 
@@ -64,6 +66,12 @@ func Load() (*Config, error) {
 
 	if logFile := os.Getenv("LOG_FILE"); logFile != "" {
 		config.LogFile = logFile
+	}
+
+	if webPort := os.Getenv("WEB_PORT"); webPort != "" {
+		if p, err := strconv.Atoi(webPort); err == nil {
+			config.WebPort = p
+		}
 	}
 
 	// Validate required fields

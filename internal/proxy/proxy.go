@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -21,25 +22,27 @@ var bufferPool = sync.Pool{
 }
 
 type Server struct {
-	config     *config.Config
-	upstream   *upstream.Connection
-	clients    *client.Manager
-	logger     *logger.Logger
-	listener   net.Listener
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
+	config    *config.Config
+	upstream  *upstream.Connection
+	clients   *client.Manager
+	logger    *logger.Logger
+	listener  net.Listener
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	startTime time.Time
 }
 
 func NewServer(cfg *config.Config, log *logger.Logger) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	ps := &Server{
-		config:  cfg,
-		logger:  log,
-		clients: client.NewManager(cfg.MaxClients, log),
-		ctx:     ctx,
-		cancel:  cancel,
+		config:    cfg,
+		logger:    log,
+		clients:   client.NewManager(cfg.MaxClients, log),
+		ctx:       ctx,
+		cancel:    cancel,
+		startTime: time.Now(),
 	}
 
 	// Create upstream connection with callback for received data
@@ -50,7 +53,7 @@ func NewServer(cfg *config.Config, log *logger.Logger) *Server {
 
 func (ps *Server) onUpstreamData(data []byte) {
 	// Log packet if enabled
-	ps.logger.LogPacket("UP→", data, "")
+	ps.logger.LogPacket("UP->", data, "")
 
 	// Broadcast to all connected clients
 	ps.clients.Broadcast(data)
@@ -179,7 +182,7 @@ func (ps *Server) handleClient(cl *client.Client) {
 			copy(data, buf[:n])
 
 			// Log packet if enabled
-			ps.logger.LogPacket("→UP", data, cl.ID)
+			ps.logger.LogPacket("->UP", data, cl.ID)
 
 			// Forward to upstream only (not to other clients)
 			if ps.upstream.IsConnected() {
@@ -200,6 +203,7 @@ func (ps *Server) GetStatus() map[string]interface{} {
 		"listen_addr":       ps.config.ListenAddr(),
 		"connected_clients": ps.clients.Count(),
 		"max_clients":       ps.config.MaxClients,
+		"start_time":        ps.startTime.Format(time.RFC3339),
 	}
 }
 
@@ -211,4 +215,25 @@ func (ps *Server) GetClientCount() int {
 // IsUpstreamConnected returns whether the upstream is connected
 func (ps *Server) IsUpstreamConnected() bool {
 	return ps.upstream.IsConnected()
+}
+
+// ErrInvalidTarget is returned when an invalid target is specified for packet injection
+var ErrInvalidTarget = fmt.Errorf("invalid target: must be 'upstream' or 'downstream'")
+
+// InjectPacket injects a packet to the specified target (upstream or downstream)
+func (ps *Server) InjectPacket(target string, data []byte) error {
+	if target == "upstream" {
+		if !ps.upstream.IsConnected() {
+			return net.ErrClosed
+		}
+		// Log as if it came from a client (Client -> Upstream)
+		ps.logger.LogPacket("->UP", data, "INJECT")
+		return ps.upstream.Write(data)
+	} else if target == "downstream" {
+		// Log as if it came from upstream (Upstream -> Client)
+		ps.logger.LogPacket("UP->", data, "INJECT")
+		ps.clients.Broadcast(data)
+		return nil
+	}
+	return ErrInvalidTarget
 }

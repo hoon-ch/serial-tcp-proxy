@@ -8,6 +8,7 @@ import (
 	"github.com/hoon-ch/serial-tcp-proxy/internal/config"
 	"github.com/hoon-ch/serial-tcp-proxy/internal/logger"
 	"github.com/hoon-ch/serial-tcp-proxy/internal/proxy"
+	"github.com/hoon-ch/serial-tcp-proxy/internal/web"
 )
 
 var Version = "dev"
@@ -41,6 +42,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Start Web UI
+	webServer := web.NewServer(cfg, server, log)
+	if err := webServer.Start(); err != nil {
+		log.Error("Failed to start web server: %v", err)
+		// Don't exit, just log error
+	}
+
 	// Wait for shutdown signal
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -49,5 +57,6 @@ func main() {
 	log.Info("Received signal %v, shutting down...", sig)
 
 	// Graceful shutdown
+	webServer.Stop()
 	server.Stop()
 }

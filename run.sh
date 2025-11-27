@@ -11,6 +11,7 @@ if [ -f "$CONFIG_PATH" ]; then
     export MAX_CLIENTS=$(jq -r '.max_clients' "$CONFIG_PATH")
     export LOG_PACKETS=$(jq -r '.log_packets' "$CONFIG_PATH")
     export LOG_FILE=$(jq -r '.log_file' "$CONFIG_PATH")
+    export WEB_PORT=$(jq -r '.web_port // 18080' "$CONFIG_PATH")
 fi
 
 exec /usr/local/bin/serial-tcp-proxy
