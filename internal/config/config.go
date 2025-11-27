@@ -26,7 +26,7 @@ func Load() (*Config, error) {
 		MaxClients:     10,
 		LogPackets:     false,
 		LogFile:        "/data/packets.log",
-		WebPort:        8080,
+		WebPort:        18080,
 		ReconnectDelay: time.Second,
 	}
 

@@ -1,6 +1,6 @@
 name: "Serial TCP Proxy"
 description: "TCP proxy for Serial-to-TCP converters (EW11, etc.) with multi-client support and packet logging"
-version: "1.0.0"
+version: "1.1.0"
 slug: "serial_tcp_proxy"
 arch:
   - aarch64
@@ -11,6 +11,12 @@ init: false
 homeassistant_api: false
 host_network: true
 
+# Web UI settings
+ingress: true
+ingress_port: 18080
+panel_icon: "mdi:swap-horizontal"
+panel_title: "Serial TCP Proxy"
+
 options:
   upstream_host: "192.168.0.100"
   upstream_port: 8899
@@ -18,6 +24,7 @@ options:
   max_clients: 10
   log_packets: false
   log_file: "/data/packets.log"
+  web_port: 18080
 
 schema:
   upstream_host: str
@@ -26,3 +33,4 @@ schema:
   max_clients: int(1,100)
   log_packets: bool
   log_file: str
+  web_port: port?
