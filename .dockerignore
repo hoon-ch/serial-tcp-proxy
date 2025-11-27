@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+.github
+
+# Documentation
+*.md
+serial-tcp-proxy-sdd.md
+
+# Binaries (will be built in container)
+serial-tcp-proxy
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files
+**/*_test.go
+*.test
+*.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary
+tmp/
+temp/
+
+# Local configs
+options.json
