@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"crypto/subtle"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
@@ -46,22 +47,80 @@ func NewServer(cfg *config.Config, p *proxy.Server, l *logger.Logger) *Server {
 	return s
 }
 
+// authMiddleware wraps a handler with basic authentication
+func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.config.WebAuthEnabled {
+			next(w, r)
+			return
+		}
+
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Serial TCP Proxy"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(s.config.WebAuthUsername)) == 1
+		passwordMatch := subtle.ConstantTimeCompare([]byte(password), []byte(s.config.WebAuthPassword)) == 1
+
+		if !usernameMatch || !passwordMatch {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Serial TCP Proxy"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+// authHandler wraps an http.Handler with basic authentication
+func (s *Server) authHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.config.WebAuthEnabled {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Serial TCP Proxy"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(s.config.WebAuthUsername)) == 1
+		passwordMatch := subtle.ConstantTimeCompare([]byte(password), []byte(s.config.WebAuthPassword)) == 1
+
+		if !usernameMatch || !passwordMatch {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Serial TCP Proxy"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
 	// API endpoints
+	// /api/health is public for health probes
 	mux.HandleFunc("/api/health", s.handleHealth)
-	mux.HandleFunc("/api/status", s.handleStatus)
-	mux.HandleFunc("/api/config", s.handleConfig)
-	mux.HandleFunc("/api/events", s.handleEvents)
-	mux.HandleFunc("/api/inject", s.handleInject)
+	// Protected endpoints require authentication when enabled
+	mux.HandleFunc("/api/status", s.authMiddleware(s.handleStatus))
+	mux.HandleFunc("/api/config", s.authMiddleware(s.handleConfig))
+	mux.HandleFunc("/api/events", s.authMiddleware(s.handleEvents))
+	mux.HandleFunc("/api/inject", s.authMiddleware(s.handleInject))
 
-	// Static files
+	// Static files (protected)
 	staticRoot, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		return err
 	}
-	mux.Handle("/", http.FileServer(http.FS(staticRoot)))
+	mux.Handle("/", s.authHandler(http.FileServer(http.FS(staticRoot))))
 
 	s.httpServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.config.WebPort),

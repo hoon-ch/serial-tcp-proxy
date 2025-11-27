@@ -381,3 +381,322 @@ func TestHealthEndpoint_ClientCount(t *testing.T) {
 		t.Errorf("Expected max 10 clients, got %d", health.Checks.Clients.Max)
 	}
 }
+
+func TestAuthMiddleware_Disabled(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost:    "127.0.0.1",
+		UpstreamPort:    8899,
+		ListenPort:      18899,
+		MaxClients:      10,
+		WebPort:         18080,
+		WebAuthEnabled:  false,
+		WebAuthUsername: "",
+		WebAuthPassword: "",
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	// Create a test handler
+	handler := webServer.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200 when auth disabled, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthMiddleware_Enabled_NoCredentials(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost:    "127.0.0.1",
+		UpstreamPort:    8899,
+		ListenPort:      18899,
+		MaxClients:      10,
+		WebPort:         18080,
+		WebAuthEnabled:  true,
+		WebAuthUsername: "admin",
+		WebAuthPassword: "secret",
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	handler := webServer.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("Expected status 401 without credentials, got %d", resp.StatusCode)
+	}
+
+	// Check WWW-Authenticate header
+	wwwAuth := resp.Header.Get("WWW-Authenticate")
+	if wwwAuth == "" {
+		t.Error("Expected WWW-Authenticate header")
+	}
+	if wwwAuth != `Basic realm="Serial TCP Proxy"` {
+		t.Errorf("Unexpected WWW-Authenticate header: %s", wwwAuth)
+	}
+}
+
+func TestAuthMiddleware_Enabled_WrongCredentials(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost:    "127.0.0.1",
+		UpstreamPort:    8899,
+		ListenPort:      18899,
+		MaxClients:      10,
+		WebPort:         18080,
+		WebAuthEnabled:  true,
+		WebAuthUsername: "admin",
+		WebAuthPassword: "secret",
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	handler := webServer.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.SetBasicAuth("admin", "wrongpassword")
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("Expected status 401 with wrong credentials, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthMiddleware_Enabled_WrongUsername(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost:    "127.0.0.1",
+		UpstreamPort:    8899,
+		ListenPort:      18899,
+		MaxClients:      10,
+		WebPort:         18080,
+		WebAuthEnabled:  true,
+		WebAuthUsername: "admin",
+		WebAuthPassword: "secret",
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	handler := webServer.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.SetBasicAuth("wronguser", "secret")
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("Expected status 401 with wrong username, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthMiddleware_Enabled_ValidCredentials(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost:    "127.0.0.1",
+		UpstreamPort:    8899,
+		ListenPort:      18899,
+		MaxClients:      10,
+		WebPort:         18080,
+		WebAuthEnabled:  true,
+		WebAuthUsername: "admin",
+		WebAuthPassword: "secret",
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	handler := webServer.authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.SetBasicAuth("admin", "secret")
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200 with valid credentials, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthHandler_Enabled_ValidCredentials(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost:    "127.0.0.1",
+		UpstreamPort:    8899,
+		ListenPort:      18899,
+		MaxClients:      10,
+		WebPort:         18080,
+		WebAuthEnabled:  true,
+		WebAuthUsername: "admin",
+		WebAuthPassword: "secret",
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	handler := webServer.authHandler(innerHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.SetBasicAuth("admin", "secret")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200 with valid credentials, got %d", resp.StatusCode)
+	}
+}
+
+func TestAuthHandler_Enabled_NoCredentials(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost:    "127.0.0.1",
+		UpstreamPort:    8899,
+		ListenPort:      18899,
+		MaxClients:      10,
+		WebPort:         18080,
+		WebAuthEnabled:  true,
+		WebAuthUsername: "admin",
+		WebAuthPassword: "secret",
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	handler := webServer.authHandler(innerHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("Expected status 401 without credentials, got %d", resp.StatusCode)
+	}
+}
+
+func TestHealthEndpoint_NoAuthRequired(t *testing.T) {
+	// Start a mock upstream server
+	upstreamListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock upstream: %v", err)
+	}
+	defer upstreamListener.Close()
+
+	go func() {
+		conn, err := upstreamListener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		time.Sleep(5 * time.Second)
+	}()
+
+	cfg := &config.Config{
+		UpstreamHost:    "127.0.0.1",
+		UpstreamPort:    upstreamListener.Addr().(*net.TCPAddr).Port,
+		ListenPort:      0,
+		MaxClients:      10,
+		WebPort:         18080,
+		WebAuthEnabled:  true,
+		WebAuthUsername: "admin",
+		WebAuthPassword: "secret",
+	}
+
+	proxyListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to get free port: %v", err)
+	}
+	cfg.ListenPort = proxyListener.Addr().(*net.TCPAddr).Port
+	proxyListener.Close()
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+
+	err = p.Start()
+	if err != nil {
+		t.Fatalf("Failed to start proxy: %v", err)
+	}
+	defer p.Stop()
+
+	time.Sleep(200 * time.Millisecond)
+
+	webServer := NewServer(cfg, p, log)
+
+	// Health endpoint should work without auth even when auth is enabled
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	w := httptest.NewRecorder()
+
+	webServer.handleHealth(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	// Should return 200 (health endpoint is public)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200 for health endpoint without auth, got %d", resp.StatusCode)
+	}
+}
