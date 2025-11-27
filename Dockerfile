@@ -23,11 +23,14 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 # Runtime stage
 FROM alpine:3.22
 
-RUN apk add --no-cache tzdata jq
+RUN apk add --no-cache tzdata jq curl
 
 COPY --from=builder /serial-tcp-proxy /usr/local/bin/
 COPY run.sh /
 
 RUN chmod +x /run.sh /usr/local/bin/serial-tcp-proxy
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:${WEB_PORT:-18080}/api/health || exit 1
 
 CMD ["/run.sh"]

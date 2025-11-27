@@ -28,6 +28,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Set version for web package
+	web.SetVersion(Version)
+
 	log.Info("Starting Serial TCP Proxy v%s", Version)
 	log.Info("Upstream: %s", cfg.UpstreamAddr())
 	log.Info("Listen: %s", cfg.ListenAddr())

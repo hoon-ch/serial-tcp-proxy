@@ -50,6 +50,7 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
 	// API endpoints
+	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/api/events", s.handleEvents)
@@ -98,6 +99,141 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(status); err != nil {
 		s.logger.Error("Failed to encode status: %v", err)
+	}
+}
+
+// HealthStatus represents the overall health status
+type HealthStatus string
+
+const (
+	HealthStatusHealthy   HealthStatus = "healthy"
+	HealthStatusDegraded  HealthStatus = "degraded"
+	HealthStatusUnhealthy HealthStatus = "unhealthy"
+)
+
+// HealthCheckStatus represents individual check status
+type HealthCheckStatus string
+
+const (
+	CheckHealthy   HealthCheckStatus = "healthy"
+	CheckUnhealthy HealthCheckStatus = "unhealthy"
+)
+
+// UpstreamCheck represents upstream health check details
+type UpstreamCheck struct {
+	Status        HealthCheckStatus `json:"status"`
+	Connected     bool              `json:"connected"`
+	Address       string            `json:"address"`
+	LastConnected string            `json:"last_connected,omitempty"`
+}
+
+// ClientsCheck represents clients health check details
+type ClientsCheck struct {
+	Status HealthCheckStatus `json:"status"`
+	Count  int               `json:"count"`
+	Max    int               `json:"max"`
+}
+
+// WebServerCheck represents web server health check details
+type WebServerCheck struct {
+	Status HealthCheckStatus `json:"status"`
+	Port   int               `json:"port"`
+}
+
+// HealthChecks contains all health check results
+type HealthChecks struct {
+	Upstream  UpstreamCheck  `json:"upstream"`
+	Clients   ClientsCheck   `json:"clients"`
+	WebServer WebServerCheck `json:"web_server"`
+}
+
+// HealthResponse represents the health check response
+type HealthResponse struct {
+	Status    HealthStatus `json:"status"`
+	Version   string       `json:"version"`
+	Uptime    int64        `json:"uptime"`
+	Checks    HealthChecks `json:"checks"`
+	Timestamp string       `json:"timestamp"`
+}
+
+// Version is set at build time via -ldflags
+// This should be set to the same value as main.Version
+var Version = "dev"
+
+// SetVersion allows setting the version from main package
+func SetVersion(v string) {
+	Version = v
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	isListening := s.proxy.IsListening()
+	isUpstreamConnected := s.proxy.IsUpstreamConnected()
+
+	// Determine upstream check status
+	upstreamStatus := CheckUnhealthy
+	if isUpstreamConnected {
+		upstreamStatus = CheckHealthy
+	}
+
+	// Get last connected time
+	lastConnected := s.proxy.GetUpstreamLastConnected()
+	lastConnectedStr := ""
+	if !lastConnected.IsZero() {
+		lastConnectedStr = lastConnected.Format(time.RFC3339)
+	}
+
+	// Determine overall health status
+	var overallStatus HealthStatus
+	if !isListening {
+		overallStatus = HealthStatusUnhealthy
+	} else if isUpstreamConnected {
+		overallStatus = HealthStatusHealthy
+	} else {
+		overallStatus = HealthStatusDegraded
+	}
+
+	// Calculate uptime in seconds
+	uptime := int64(time.Since(s.proxy.GetStartTime()).Seconds())
+
+	response := HealthResponse{
+		Status:  overallStatus,
+		Version: Version,
+		Uptime:  uptime,
+		Checks: HealthChecks{
+			Upstream: UpstreamCheck{
+				Status:        upstreamStatus,
+				Connected:     isUpstreamConnected,
+				Address:       s.proxy.GetUpstreamAddr(),
+				LastConnected: lastConnectedStr,
+			},
+			Clients: ClientsCheck{
+				Status: CheckHealthy,
+				Count:  s.proxy.GetClientCount(),
+				Max:    s.proxy.GetMaxClients(),
+			},
+			WebServer: WebServerCheck{
+				Status: CheckHealthy,
+				Port:   s.config.WebPort,
+			},
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	// Set HTTP status code based on health
+	httpStatus := http.StatusOK
+	if overallStatus == HealthStatusUnhealthy {
+		httpStatus = http.StatusServiceUnavailable
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(httpStatus)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Error("Failed to encode health response: %v", err)
 	}
 }
 

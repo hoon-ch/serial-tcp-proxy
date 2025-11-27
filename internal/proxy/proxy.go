@@ -22,15 +22,16 @@ var bufferPool = sync.Pool{
 }
 
 type Server struct {
-	config    *config.Config
-	upstream  *upstream.Connection
-	clients   *client.Manager
-	logger    *logger.Logger
-	listener  net.Listener
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	startTime time.Time
+	config     *config.Config
+	upstream   *upstream.Connection
+	clients    *client.Manager
+	logger     *logger.Logger
+	listener   net.Listener
+	listenerMu sync.RWMutex
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
+	startTime  time.Time
 }
 
 func NewServer(cfg *config.Config, log *logger.Logger) *Server {
@@ -68,7 +69,9 @@ func (ps *Server) Start() error {
 	if err != nil {
 		return err
 	}
+	ps.listenerMu.Lock()
 	ps.listener = listener
+	ps.listenerMu.Unlock()
 
 	ps.logger.Info("Listening on %s", ps.config.ListenAddr())
 
@@ -84,9 +87,12 @@ func (ps *Server) Stop() {
 	// Stop accepting new connections
 	ps.cancel()
 
+	ps.listenerMu.Lock()
 	if ps.listener != nil {
 		ps.listener.Close()
+		ps.listener = nil
 	}
+	ps.listenerMu.Unlock()
 
 	// Give existing clients time to finish (max 5 seconds)
 	done := make(chan struct{})
@@ -215,6 +221,33 @@ func (ps *Server) GetClientCount() int {
 // IsUpstreamConnected returns whether the upstream is connected
 func (ps *Server) IsUpstreamConnected() bool {
 	return ps.upstream.IsConnected()
+}
+
+// GetUpstreamAddr returns the upstream address
+func (ps *Server) GetUpstreamAddr() string {
+	return ps.upstream.GetAddr()
+}
+
+// GetUpstreamLastConnected returns the last time upstream was connected
+func (ps *Server) GetUpstreamLastConnected() time.Time {
+	return ps.upstream.GetLastConnected()
+}
+
+// GetStartTime returns the server start time
+func (ps *Server) GetStartTime() time.Time {
+	return ps.startTime
+}
+
+// GetMaxClients returns the maximum number of clients allowed
+func (ps *Server) GetMaxClients() int {
+	return ps.config.MaxClients
+}
+
+// IsListening returns whether the proxy is listening for connections
+func (ps *Server) IsListening() bool {
+	ps.listenerMu.RLock()
+	defer ps.listenerMu.RUnlock()
+	return ps.listener != nil
 }
 
 // ErrInvalidTarget is returned when an invalid target is specified for packet injection

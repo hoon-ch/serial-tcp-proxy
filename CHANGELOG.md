@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2025-11-28
+
+### Added
+- **Health Check Endpoint**: `/api/health` for container orchestration (Docker, Kubernetes)
+  - Reports `healthy`, `degraded`, or `unhealthy` status
+  - Includes upstream connection details, client counts, and web server status
+  - Returns HTTP 200 for healthy/degraded, 503 for unhealthy
+- Docker HEALTHCHECK directive with configurable port via `WEB_PORT` environment variable
+- Upstream last connected time tracking
+
+### Changed
+- Improved thread safety for listener state management with mutex protection
+- Version is now synchronized between main package and web package
+
 ## [1.1.0] - 2025-11-28
 
 ### Added

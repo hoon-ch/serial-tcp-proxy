@@ -16,6 +16,7 @@ A TCP proxy server that sits between Serial-to-TCP converters (e.g., Elfin-EW11)
 - **Low latency**: < 1ms additional latency
 - **Home Assistant Add-on**: Easy deployment as HA Add-on
 - **Web UI**: Real-time monitoring dashboard with packet inspector
+- **Health Check Endpoint**: Container orchestration support (Docker, Kubernetes)
 
 ## Use Cases
 
@@ -144,6 +145,79 @@ When running as a Home Assistant Add-on, the Web UI is accessible via Ingress (s
 - **Dark/Light Theme**: Toggle between themes
 
 ![Web UI Screenshot](docs/images/webui.png)
+
+## Health Check
+
+The proxy provides a health check endpoint for container orchestration platforms.
+
+### Endpoint
+
+`GET /api/health`
+
+### Response
+
+```json
+{
+  "status": "healthy|degraded|unhealthy",
+  "version": "1.1.1",
+  "uptime": 3600,
+  "checks": {
+    "upstream": {
+      "status": "healthy|unhealthy",
+      "connected": true,
+      "address": "192.168.50.143:8899",
+      "last_connected": "2025-11-28T00:00:00Z"
+    },
+    "clients": {
+      "status": "healthy",
+      "count": 2,
+      "max": 10
+    },
+    "web_server": {
+      "status": "healthy",
+      "port": 18080
+    }
+  },
+  "timestamp": "2025-11-28T00:00:00Z"
+}
+```
+
+### Health Status
+
+| Status | Description | HTTP Code |
+|--------|-------------|-----------|
+| `healthy` | Upstream connected and proxy listening | 200 |
+| `degraded` | Upstream disconnected but proxy still running (auto-reconnecting) | 200 |
+| `unhealthy` | Proxy not listening | 503 |
+
+### Docker HEALTHCHECK
+
+The Docker image includes a built-in health check:
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:${WEB_PORT:-18080}/api/health || exit 1
+```
+
+### Kubernetes
+
+Example liveness and readiness probes:
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: 18080
+  initialDelaySeconds: 5
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: 18080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+```
 
 ## Building
 
