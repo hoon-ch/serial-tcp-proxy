@@ -82,18 +82,25 @@ func (s *Server) Stop() {
 	if s.httpServer != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		s.httpServer.Shutdown(ctx)
+		if err := s.httpServer.Shutdown(ctx); err != nil {
+			s.logger.Error("Web server shutdown error: %v", err)
+		}
 	}
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	status := s.proxy.GetStatus()
-	json.NewEncoder(w).Encode(status)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(status); err != nil {
+		s.logger.Error("Failed to encode status: %v", err)
+	}
 }
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
-	// Return safe config (hide sensitive if any, though none currently)
-	json.NewEncoder(w).Encode(s.config)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(s.config); err != nil {
+		s.logger.Error("Failed to encode config: %v", err)
+	}
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
