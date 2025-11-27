@@ -42,17 +42,19 @@ func (s ConnectionState) String() string {
 }
 
 type Connection struct {
-	addr    string
-	conn    net.Conn
-	connMu  sync.RWMutex
-	writeMu sync.Mutex
-	state   ConnectionState
-	stateMu sync.RWMutex
-	logger  *logger.Logger
-	onData  func([]byte)
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
+	addr          string
+	conn          net.Conn
+	connMu        sync.RWMutex
+	writeMu       sync.Mutex
+	state         ConnectionState
+	stateMu       sync.RWMutex
+	logger        *logger.Logger
+	onData        func([]byte)
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	lastConnected time.Time
+	lastConnMu    sync.RWMutex
 }
 
 func NewConnection(addr string, log *logger.Logger, onData func([]byte)) *Connection {
@@ -81,6 +83,16 @@ func (u *Connection) GetState() ConnectionState {
 
 func (u *Connection) IsConnected() bool {
 	return u.GetState() == StateConnected
+}
+
+func (u *Connection) GetLastConnected() time.Time {
+	u.lastConnMu.RLock()
+	defer u.lastConnMu.RUnlock()
+	return u.lastConnected
+}
+
+func (u *Connection) GetAddr() string {
+	return u.addr
 }
 
 func (u *Connection) Start() {
@@ -143,6 +155,10 @@ func (u *Connection) connectionLoop() {
 		u.conn = conn
 		u.connMu.Unlock()
 		u.setState(StateConnected)
+
+		u.lastConnMu.Lock()
+		u.lastConnected = time.Now()
+		u.lastConnMu.Unlock()
 
 		u.logger.Info("Connected to upstream %s", u.addr)
 

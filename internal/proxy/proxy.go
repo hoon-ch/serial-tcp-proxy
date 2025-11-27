@@ -217,6 +217,31 @@ func (ps *Server) IsUpstreamConnected() bool {
 	return ps.upstream.IsConnected()
 }
 
+// GetUpstreamAddr returns the upstream address
+func (ps *Server) GetUpstreamAddr() string {
+	return ps.upstream.GetAddr()
+}
+
+// GetUpstreamLastConnected returns the last time upstream was connected
+func (ps *Server) GetUpstreamLastConnected() time.Time {
+	return ps.upstream.GetLastConnected()
+}
+
+// GetStartTime returns the server start time
+func (ps *Server) GetStartTime() time.Time {
+	return ps.startTime
+}
+
+// GetMaxClients returns the maximum number of clients allowed
+func (ps *Server) GetMaxClients() int {
+	return ps.config.MaxClients
+}
+
+// IsListening returns whether the proxy is listening for connections
+func (ps *Server) IsListening() bool {
+	return ps.listener != nil
+}
+
 // ErrInvalidTarget is returned when an invalid target is specified for packet injection
 var ErrInvalidTarget = fmt.Errorf("invalid target: must be 'upstream' or 'downstream'")
 
