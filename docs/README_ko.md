@@ -16,6 +16,7 @@ Serial-to-TCP 변환기(Elfin-EW11 등)와 클라이언트(Home Assistant 등) �
 - **낮은 지연시간**: < 1ms 추가 지연
 - **Home Assistant Add-on**: HA Add-on으로 쉽게 배포 가능
 - **Web UI**: 실시간 모니터링 대시보드 및 패킷 인스펙터
+- **헬스 체크 엔드포인트**: 컨테이너 오케스트레이션 지원 (Docker, Kubernetes)
 
 ## 사용 사례
 
@@ -144,6 +145,79 @@ Home Assistant Add-on으로 실행 시, Ingress를 통해 사이드바 패널에
 - **다크/라이트 테마**: 테마 전환 지원
 
 ![Web UI 스크린샷](images/webui.png)
+
+## 헬스 체크
+
+프록시는 컨테이너 오케스트레이션 플랫폼을 위한 헬스 체크 엔드포인트를 제공합니다.
+
+### 엔드포인트
+
+`GET /api/health`
+
+### 응답
+
+```json
+{
+  "status": "healthy|degraded|unhealthy",
+  "version": "1.1.1",
+  "uptime": 3600,
+  "checks": {
+    "upstream": {
+      "status": "healthy|unhealthy",
+      "connected": true,
+      "address": "192.168.50.143:8899",
+      "last_connected": "2025-11-28T00:00:00Z"
+    },
+    "clients": {
+      "status": "healthy",
+      "count": 2,
+      "max": 10
+    },
+    "web_server": {
+      "status": "healthy",
+      "port": 18080
+    }
+  },
+  "timestamp": "2025-11-28T00:00:00Z"
+}
+```
+
+### 헬스 상태
+
+| 상태 | 설명 | HTTP 코드 |
+|------|------|-----------|
+| `healthy` | Upstream 연결됨 및 프록시 리스닝 중 | 200 |
+| `degraded` | Upstream 연결 끊김, 프록시는 실행 중 (자동 재연결 중) | 200 |
+| `unhealthy` | 프록시 리스닝 안 함 | 503 |
+
+### Docker HEALTHCHECK
+
+Docker 이미지에는 내장 헬스 체크가 포함되어 있습니다:
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:${WEB_PORT:-18080}/api/health || exit 1
+```
+
+### Kubernetes
+
+Liveness 및 Readiness 프로브 예시:
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: 18080
+  initialDelaySeconds: 5
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: 18080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+```
 
 ## 빌드
 

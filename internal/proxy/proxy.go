@@ -22,15 +22,16 @@ var bufferPool = sync.Pool{
 }
 
 type Server struct {
-	config    *config.Config
-	upstream  *upstream.Connection
-	clients   *client.Manager
-	logger    *logger.Logger
-	listener  net.Listener
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	startTime time.Time
+	config     *config.Config
+	upstream   *upstream.Connection
+	clients    *client.Manager
+	logger     *logger.Logger
+	listener   net.Listener
+	listenerMu sync.RWMutex
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
+	startTime  time.Time
 }
 
 func NewServer(cfg *config.Config, log *logger.Logger) *Server {
@@ -68,7 +69,9 @@ func (ps *Server) Start() error {
 	if err != nil {
 		return err
 	}
+	ps.listenerMu.Lock()
 	ps.listener = listener
+	ps.listenerMu.Unlock()
 
 	ps.logger.Info("Listening on %s", ps.config.ListenAddr())
 
@@ -84,9 +87,12 @@ func (ps *Server) Stop() {
 	// Stop accepting new connections
 	ps.cancel()
 
+	ps.listenerMu.Lock()
 	if ps.listener != nil {
 		ps.listener.Close()
+		ps.listener = nil
 	}
+	ps.listenerMu.Unlock()
 
 	// Give existing clients time to finish (max 5 seconds)
 	done := make(chan struct{})
@@ -239,6 +245,8 @@ func (ps *Server) GetMaxClients() int {
 
 // IsListening returns whether the proxy is listening for connections
 func (ps *Server) IsListening() bool {
+	ps.listenerMu.RLock()
+	defer ps.listenerMu.RUnlock()
 	return ps.listener != nil
 }
 

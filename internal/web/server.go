@@ -156,8 +156,14 @@ type HealthResponse struct {
 	Timestamp string       `json:"timestamp"`
 }
 
-// Version is set at build time
+// Version is set at build time via -ldflags
+// This should be set to the same value as main.Version
 var Version = "dev"
+
+// SetVersion allows setting the version from main package
+func SetVersion(v string) {
+	Version = v
+}
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

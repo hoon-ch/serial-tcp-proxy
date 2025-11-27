@@ -31,6 +31,6 @@ COPY run.sh /
 RUN chmod +x /run.sh /usr/local/bin/serial-tcp-proxy
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:18080/api/health || exit 1
+  CMD curl -f http://localhost:${WEB_PORT:-18080}/api/health || exit 1
 
 CMD ["/run.sh"]
