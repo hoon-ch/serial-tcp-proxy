@@ -15,6 +15,7 @@ A TCP proxy server that sits between Serial-to-TCP converters (e.g., Elfin-EW11)
 - **Auto-reconnect**: Automatic reconnection with exponential backoff
 - **Low latency**: < 1ms additional latency
 - **Home Assistant Add-on**: Easy deployment as HA Add-on
+- **Web UI**: Real-time monitoring dashboard with packet inspector
 
 ## Use Cases
 
@@ -101,6 +102,7 @@ docker run -d \
 | `MAX_CLIENTS` | Maximum simultaneous clients | 10 |
 | `LOG_PACKETS` | Enable packet logging | false |
 | `LOG_FILE` | Packet log file path | /data/packets.log |
+| `WEB_PORT` | Web UI port | 8080 |
 
 ## Log Format
 
@@ -119,6 +121,27 @@ docker run -d \
 
 1. **Upstream → Clients**: Broadcast to all connected clients
 2. **Client → Upstream**: Forward to upstream only (not to other clients)
+
+## Web UI
+
+The proxy includes a built-in web interface for monitoring and debugging.
+
+Access at `http://localhost:8080` (or configured WEB_PORT).
+
+### Features
+
+- **Dashboard**: Real-time status monitoring (upstream connection, client count, uptime)
+- **Live Logs**: Stream logs in real-time with pause/clear functionality
+- **Packet Inspector**:
+  - View packets in HEX and ASCII format
+  - Filter and sort packets
+  - Compare two packets (diff view)
+  - Data inspector (Binary, Int8/16/32, Float32, String interpretation)
+  - Export packets to file
+- **Packet Injection**: Send test packets to upstream or broadcast to downstream clients
+- **Dark/Light Theme**: Toggle between themes
+
+![Web UI Screenshot](docs/images/webui.png)
 
 ## Building
 
