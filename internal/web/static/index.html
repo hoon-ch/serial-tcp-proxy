@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Serial TCP Proxy</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="stylesheet" href="style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 17l6-6-6-6M12 19h8" />
+                </svg>
+                <h1>Serial TCP Proxy</h1>
+            </div>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <button id="theme-toggle" class="btn-icon" title="Toggle Theme"><span>🌙</span></button>
+                <div class="status-badge" id="connection-status">
+                    <span class="dot"></span>
+                    <span class="text">Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="dashboard-grid">
+                <!-- Stats Cards -->
+                <div class="card stat-card">
+                    <h3>Upstream</h3>
+                    <div class="value" id="upstream-addr">-</div>
+                    <div class="label">Address</div>
+                </div>
+                <div class="card stat-card">
+                    <h3>Listen Port</h3>
+                    <div class="value" id="listen-port">-</div>
+                    <div class="label">TCP Port</div>
+                </div>
+                <div class="card stat-card">
+                    <h3>Clients</h3>
+                    <div class="value" id="client-count">0</div>
+                    <div class="label">Connected</div>
+                </div>
+                <div class="card stat-card">
+                    <h3>Uptime</h3>
+                    <div class="value" id="uptime">-</div>
+                    <div class="label">Since Start</div>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="logs">Live Logs</button>
+                <button class="tab-btn" data-tab="inspector">Packet Inspector</button>
+            </div>
+
+            <div class="tab-content active" id="tab-logs">
+                <div class="logs-section">
+                    <div class="section-header">
+                        <h2>Live Logs</h2>
+                        <div class="actions">
+                            <button id="clear-logs" class="btn btn-secondary">Clear</button>
+                            <button id="pause-logs" class="btn btn-secondary">Pause</button>
+                        </div>
+                    </div>
+                    <div class="logs-container" id="logs-container">
+                        <!-- Logs will be inserted here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="tab-inspector">
+                <div class="logs-section">
+                    <div class="section-header">
+                        <h2>Packet Inspector</h2>
+                        <div class="actions">
+                            <button id="toggle-inject" class="btn btn-secondary">Inject Packet</button>
+                            <input type="text" id="packet-filter" class="filter-input"
+                                placeholder="Filter packets (Hex/ASCII)...">
+                            <div class="column-toggles">
+                                <label><input type="checkbox" checked data-col="time"> Time</label>
+                                <label><input type="checkbox" checked data-col="dir"> Dir</label>
+                                <label><input type="checkbox" checked data-col="len"> Len</label>
+                                <label><input type="checkbox" checked data-col="hex"> Hex</label>
+                                <label><input type="checkbox" checked data-col="ascii"> ASCII</label>
+                            </div>
+                            <button id="clear-packets" class="btn btn-secondary">Clear</button>
+                            <button id="pause-packets" class="btn btn-secondary">Pause</button>
+                            <button id="diff-packets" class="btn btn-secondary" disabled>Diff (0/2)</button>
+                            <button id="export-packets" class="btn btn-secondary">Export</button>
+                        </div>
+                    </div>
+
+                    <!-- Injection Panel -->
+                    <div id="inject-panel" class="inject-panel" style="display: none;">
+                        <div class="inject-form">
+                            <div class="form-group">
+                                <label>Target</label>
+                                <select id="inject-target">
+                                    <option value="upstream">Upstream (Server)</option>
+                                    <option value="downstream">Downstream (Clients)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Format</label>
+                                <select id="inject-format">
+                                    <option value="hex">Hex</option>
+                                    <option value="ascii">ASCII</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Data</label>
+                                <input type="text" id="inject-data" placeholder="e.g. 01 02 03 or Hello">
+                            </div>
+                            <button id="send-packet" class="btn btn-primary">Send</button>
+                        </div>
+                    </div>
+
+                    <div class="packet-table-container">
+                        <table class="packet-table">
+                            <thead>
+                                <tr>
+                                    <th data-sort="time" class="sortable">Time</th>
+                                    <th data-sort="dir" class="sortable">Direction</th>
+                                    <th data-sort="len" class="sortable">Length</th>
+                                    <th data-sort="hex" class="sortable">Hex</th>
+                                    <th data-sort="ascii" class="sortable">ASCII</th>
+                                </tr>
+                            </thead>
+                            <tbody id="packet-list">
+                                <!-- Packets will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Data Inspector Panel -->
+                    <div id="inspector-panel" class="inspector-panel" style="display: none;">
+                        <div class="inspector-header">
+                            <h3>Data Inspector</h3>
+                            <button id="close-inspector" class="btn-icon">×</button>
+                        </div>
+                        <div class="inspector-content">
+                            <div class="inspector-item">
+                                <span class="label">Binary</span>
+                                <span class="value" id="insp-binary">-</span>
+                            </div>
+                            <div class="inspector-item">
+                                <span class="label">Int8</span>
+                                <span class="value" id="insp-int8">-</span>
+                            </div>
+                            <div class="inspector-item">
+                                <span class="label">Uint8</span>
+                                <span class="value" id="insp-uint8">-</span>
+                            </div>
+                            <div class="inspector-item">
+                                <span class="label">Int16 (LE/BE)</span>
+                                <span class="value" id="insp-int16">-</span>
+                            </div>
+                            <div class="inspector-item">
+                                <span class="label">Uint16 (LE/BE)</span>
+                                <span class="value" id="insp-uint16">-</span>
+                            </div>
+                            <div class="inspector-item">
+                                <span class="label">Int32 (LE/BE)</span>
+                                <span class="value" id="insp-int32">-</span>
+                            </div>
+                            <div class="inspector-item">
+                                <span class="label">Uint32 (LE/BE)</span>
+                                <span class="value" id="insp-uint32">-</span>
+                            </div>
+                            <div class="inspector-item">
+                                <span class="label">Float32 (LE/BE)</span>
+                                <span class="value" id="insp-float32">-</span>
+                            </div>
+                            <div class="inspector-item">
+                                <span class="label">String</span>
+                                <span class="value" id="insp-string">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Diff Modal -->
+                    <div id="diff-modal" class="modal" style="display: none;">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h3>Packet Diff</h3>
+                                <button id="close-diff" class="btn-icon">×</button>
+                            </div>
+                            <div class="diff-container">
+                                <div class="diff-packet">
+                                    <h4>Packet A</h4>
+                                    <div id="diff-packet-a" class="diff-hex"></div>
+                                </div>
+                                <div class="diff-packet">
+                                    <h4>Packet B</h4>
+                                    <div id="diff-packet-b" class="diff-hex"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>
