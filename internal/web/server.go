@@ -332,6 +332,8 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	// Disable buffering for nginx/Home Assistant Ingress proxy
+	w.Header().Set("X-Accel-Buffering", "no")
 
 	// Create a channel for this client
 	clientChan := make(chan string, 10)
