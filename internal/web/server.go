@@ -47,30 +47,39 @@ func NewServer(cfg *config.Config, p *proxy.Server, l *logger.Logger) *Server {
 	return s
 }
 
+// validateBasicAuth checks if the request has valid basic auth credentials.
+// Returns true if auth is disabled or credentials are valid.
+// Returns false if auth is enabled but credentials are missing or invalid.
+func (s *Server) validateBasicAuth(r *http.Request) bool {
+	if !s.config.WebAuthEnabled {
+		return true
+	}
+
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		return false
+	}
+
+	usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(s.config.WebAuthUsername)) == 1
+	passwordMatch := subtle.ConstantTimeCompare([]byte(password), []byte(s.config.WebAuthPassword)) == 1
+
+	return usernameMatch && passwordMatch
+}
+
+// sendUnauthorized sends a 401 Unauthorized response with WWW-Authenticate header
+func (s *Server) sendUnauthorized(w http.ResponseWriter, r *http.Request) {
+	s.logger.Warn("Authentication failed: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+	w.Header().Set("WWW-Authenticate", `Basic realm="Serial TCP Proxy"`)
+	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+}
+
 // authMiddleware wraps a handler with basic authentication
 func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !s.config.WebAuthEnabled {
-			next(w, r)
+		if !s.validateBasicAuth(r) {
+			s.sendUnauthorized(w, r)
 			return
 		}
-
-		username, password, ok := r.BasicAuth()
-		if !ok {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Serial TCP Proxy"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(s.config.WebAuthUsername)) == 1
-		passwordMatch := subtle.ConstantTimeCompare([]byte(password), []byte(s.config.WebAuthPassword)) == 1
-
-		if !usernameMatch || !passwordMatch {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Serial TCP Proxy"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
 		next(w, r)
 	}
 }
@@ -78,27 +87,10 @@ func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 // authHandler wraps an http.Handler with basic authentication
 func (s *Server) authHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.config.WebAuthEnabled {
-			next.ServeHTTP(w, r)
+		if !s.validateBasicAuth(r) {
+			s.sendUnauthorized(w, r)
 			return
 		}
-
-		username, password, ok := r.BasicAuth()
-		if !ok {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Serial TCP Proxy"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(s.config.WebAuthUsername)) == 1
-		passwordMatch := subtle.ConstantTimeCompare([]byte(password), []byte(s.config.WebAuthPassword)) == 1
-
-		if !usernameMatch || !passwordMatch {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Serial TCP Proxy"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
 		next.ServeHTTP(w, r)
 	})
 }
