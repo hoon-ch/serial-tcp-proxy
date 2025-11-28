@@ -13,6 +13,7 @@ import { exportPackets } from './modules/export.js';
 import { initInjection } from './modules/injection.js';
 import { updateInspector, renderDiff } from './modules/inspector.js';
 import { initTheme } from './modules/theme.js';
+import { apiUrl } from './modules/api.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize UI Modules
@@ -26,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isPacketsPaused = false;
 
     // Status & Uptime
-    fetch('/api/status')
+    fetch(apiUrl('/api/status'))
         .then(response => response.json())
         .then(data => {
             const start = updateStatus(data);
@@ -38,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(err => console.error('Failed to fetch initial status:', err));
 
     // SSE
-    const evtSource = new EventSource('/api/events');
+    const evtSource = new EventSource(apiUrl('/api/events'));
 
     evtSource.addEventListener('status', (e) => {
         const data = JSON.parse(e.data);

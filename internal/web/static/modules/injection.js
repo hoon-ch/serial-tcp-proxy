@@ -1,3 +1,5 @@
+import { apiUrl } from './api.js';
+
 export function initInjection() {
     const toggleInjectBtn = document.getElementById('toggle-inject');
     const injectPanel = document.getElementById('inject-panel');
@@ -28,7 +30,7 @@ export function initInjection() {
         }
 
         try {
-            const response = await fetch('/api/inject', {
+            const response = await fetch(apiUrl('/api/inject'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
