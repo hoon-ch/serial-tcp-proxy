@@ -263,8 +263,27 @@ go build -o serial-tcp-proxy ./cmd/serial-tcp-proxy
 ## Testing
 
 ```bash
+# Run all tests
 go test -v ./...
+
+# Run tests with coverage
+go test -cover ./...
+
+# Generate coverage report
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out -o coverage.html
 ```
+
+### Test Coverage
+
+| Package | Coverage |
+|---------|----------|
+| internal/web | 92.4% |
+| internal/client | 93.9% |
+| internal/upstream | 86.0% |
+| internal/logger | 83.3% |
+| internal/config | 72.7% |
+| internal/proxy | 70.8% |
 
 ## Compatible Devices
 
