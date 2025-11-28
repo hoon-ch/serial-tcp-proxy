@@ -511,9 +511,11 @@ func (c *wsClient) writePump() {
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				return
+			}
 			if !ok {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
@@ -524,14 +526,18 @@ func (c *wsClient) writePump() {
 			if statusData, err := json.Marshal(c.server.proxy.GetStatus()); err == nil {
 				msg := wsMessage{Type: "status", Data: json.RawMessage(statusData)}
 				if data, err := json.Marshal(msg); err == nil {
-					c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+					if err := c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+						return
+					}
 					if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
 						return
 					}
 				}
 			}
 		case <-pingTicker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				return
+			}
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -549,10 +555,11 @@ func (c *wsClient) readPump() {
 	}()
 
 	c.conn.SetReadLimit(512)
-	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
+		return
+	}
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		return nil
+		return c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	})
 
 	for {
