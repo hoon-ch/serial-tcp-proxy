@@ -1,11 +1,14 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -698,5 +701,1065 @@ func TestHealthEndpoint_NoAuthRequired(t *testing.T) {
 	// Should return 200 (health endpoint is public)
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status 200 for health endpoint without auth, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleStatus_Success(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "192.168.255.255",
+		UpstreamPort: 9999,
+		ListenPort:   0,
+		MaxClients:   10,
+		LogPackets:   false,
+		WebPort:      18080,
+	}
+
+	proxyListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to get free port: %v", err)
+	}
+	cfg.ListenPort = proxyListener.Addr().(*net.TCPAddr).Port
+	proxyListener.Close()
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+
+	err = p.Start()
+	if err != nil {
+		t.Fatalf("Failed to start proxy: %v", err)
+	}
+	defer p.Stop()
+
+	webServer := NewServer(cfg, p, log)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	w := httptest.NewRecorder()
+
+	webServer.handleStatus(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("Expected Content-Type 'application/json', got '%s'", contentType)
+	}
+
+	var status map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+}
+
+func TestHandleStatus_MethodNotAllowed(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/status", nil)
+	w := httptest.NewRecorder()
+
+	webServer.handleStatus(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("Expected status 405, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleConfig_Success(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "192.168.1.100",
+		UpstreamPort: 5000,
+		ListenPort:   6000,
+		MaxClients:   20,
+		LogPackets:   true,
+		WebPort:      8080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	w := httptest.NewRecorder()
+
+	webServer.handleConfig(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("Expected Content-Type 'application/json', got '%s'", contentType)
+	}
+
+	var pubCfg PublicConfig
+	if err := json.NewDecoder(resp.Body).Decode(&pubCfg); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if pubCfg.UpstreamHost != "192.168.1.100" {
+		t.Errorf("Expected upstream_host '192.168.1.100', got '%s'", pubCfg.UpstreamHost)
+	}
+	if pubCfg.UpstreamPort != 5000 {
+		t.Errorf("Expected upstream_port 5000, got %d", pubCfg.UpstreamPort)
+	}
+	if pubCfg.ListenPort != 6000 {
+		t.Errorf("Expected listen_port 6000, got %d", pubCfg.ListenPort)
+	}
+	if pubCfg.MaxClients != 20 {
+		t.Errorf("Expected max_clients 20, got %d", pubCfg.MaxClients)
+	}
+	if !pubCfg.LogPackets {
+		t.Error("Expected log_packets true")
+	}
+	if pubCfg.WebPort != 8080 {
+		t.Errorf("Expected web_port 8080, got %d", pubCfg.WebPort)
+	}
+}
+
+func TestHandleConfig_MethodNotAllowed(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config", nil)
+	w := httptest.NewRecorder()
+
+	webServer.handleConfig(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("Expected status 405, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleInject_MethodNotAllowed(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/inject", nil)
+	w := httptest.NewRecorder()
+
+	webServer.handleInject(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("Expected status 405, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleInject_InvalidJSON(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/inject", strings.NewReader("not valid json"))
+	w := httptest.NewRecorder()
+
+	webServer.handleInject(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleInject_InvalidHex(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	body := `{"target": "upstream", "format": "hex", "data": "not valid hex ZZ"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/inject", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	webServer.handleInject(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleInject_HexWithSpaces(t *testing.T) {
+	// Start mock upstream
+	upstreamListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock upstream: %v", err)
+	}
+	defer upstreamListener.Close()
+
+	go func() {
+		conn, err := upstreamListener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		time.Sleep(5 * time.Second)
+	}()
+
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: upstreamListener.Addr().(*net.TCPAddr).Port,
+		ListenPort:   0,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	proxyListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to get free port: %v", err)
+	}
+	cfg.ListenPort = proxyListener.Addr().(*net.TCPAddr).Port
+	proxyListener.Close()
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+
+	err = p.Start()
+	if err != nil {
+		t.Fatalf("Failed to start proxy: %v", err)
+	}
+	defer p.Stop()
+
+	time.Sleep(200 * time.Millisecond)
+
+	webServer := NewServer(cfg, p, log)
+
+	// Hex with spaces and 0x prefix
+	body := `{"target": "upstream", "format": "hex", "data": "0x48 45 4c 4c 4f"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/inject", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	webServer.handleInject(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Errorf("Expected status 200, got %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+}
+
+func TestHandleInject_ASCII(t *testing.T) {
+	// Start mock upstream
+	upstreamListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock upstream: %v", err)
+	}
+	defer upstreamListener.Close()
+
+	go func() {
+		conn, err := upstreamListener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		time.Sleep(5 * time.Second)
+	}()
+
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: upstreamListener.Addr().(*net.TCPAddr).Port,
+		ListenPort:   0,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	proxyListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to get free port: %v", err)
+	}
+	cfg.ListenPort = proxyListener.Addr().(*net.TCPAddr).Port
+	proxyListener.Close()
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+
+	err = p.Start()
+	if err != nil {
+		t.Fatalf("Failed to start proxy: %v", err)
+	}
+	defer p.Stop()
+
+	time.Sleep(200 * time.Millisecond)
+
+	webServer := NewServer(cfg, p, log)
+
+	body := `{"target": "upstream", "format": "ascii", "data": "Hello World"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/inject", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	webServer.handleInject(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Errorf("Expected status 200, got %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+}
+
+func TestHandleInject_NoUpstream(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "192.168.255.255",
+		UpstreamPort: 9999,
+		ListenPort:   0,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	proxyListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to get free port: %v", err)
+	}
+	cfg.ListenPort = proxyListener.Addr().(*net.TCPAddr).Port
+	proxyListener.Close()
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+
+	err = p.Start()
+	if err != nil {
+		t.Fatalf("Failed to start proxy: %v", err)
+	}
+	defer p.Stop()
+
+	webServer := NewServer(cfg, p, log)
+
+	body := `{"target": "upstream", "format": "ascii", "data": "test"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/inject", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	webServer.handleInject(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	// Should fail because upstream is not connected
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("Expected status 500 (no upstream), got %d", resp.StatusCode)
+	}
+}
+
+func TestBroadcastLog(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	// Create a client channel and register it
+	clientChan := make(chan string, 10)
+	webServer.clientsMu.Lock()
+	webServer.clients[clientChan] = true
+	webServer.clientsMu.Unlock()
+
+	// Broadcast a message
+	webServer.broadcastLog("test message")
+
+	// Check if client received message
+	select {
+	case msg := <-clientChan:
+		if msg != "test message" {
+			t.Errorf("Expected 'test message', got '%s'", msg)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Timeout waiting for broadcast message")
+	}
+
+	// Check if message is in buffer
+	webServer.logBufferMu.Lock()
+	found := false
+	for _, m := range webServer.logBuffer {
+		if m == "test message" {
+			found = true
+			break
+		}
+	}
+	webServer.logBufferMu.Unlock()
+
+	if !found {
+		t.Error("Message not found in log buffer")
+	}
+
+	// Clean up
+	webServer.clientsMu.Lock()
+	delete(webServer.clients, clientChan)
+	webServer.clientsMu.Unlock()
+	close(clientChan)
+}
+
+func TestBroadcastLog_BufferLimit(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	// Fill buffer beyond limit
+	for i := 0; i < 1005; i++ {
+		webServer.broadcastLog("message")
+	}
+
+	webServer.logBufferMu.Lock()
+	bufferLen := len(webServer.logBuffer)
+	webServer.logBufferMu.Unlock()
+
+	if bufferLen > 1000 {
+		t.Errorf("Expected buffer len <= 1000, got %d", bufferLen)
+	}
+}
+
+func TestBroadcastLog_SlowClient(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	// Create a slow client (buffer size 1)
+	slowClient := make(chan string, 1)
+	webServer.clientsMu.Lock()
+	webServer.clients[slowClient] = true
+	webServer.clientsMu.Unlock()
+
+	// Fill the channel
+	slowClient <- "existing"
+
+	// This should not block even though client is full
+	done := make(chan bool)
+	go func() {
+		webServer.broadcastLog("new message")
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		// Good, broadcast didn't block
+	case <-time.After(100 * time.Millisecond):
+		t.Error("BroadcastLog blocked on slow client")
+	}
+
+	// Clean up
+	webServer.clientsMu.Lock()
+	delete(webServer.clients, slowClient)
+	webServer.clientsMu.Unlock()
+	close(slowClient)
+}
+
+func TestSetVersion(t *testing.T) {
+	originalVersion := Version
+	defer func() { Version = originalVersion }()
+
+	SetVersion("1.2.3")
+	if Version != "1.2.3" {
+		t.Errorf("Expected version '1.2.3', got '%s'", Version)
+	}
+
+	SetVersion("v2.0.0-beta")
+	if Version != "v2.0.0-beta" {
+		t.Errorf("Expected version 'v2.0.0-beta', got '%s'", Version)
+	}
+}
+
+func TestServerStartStop(t *testing.T) {
+	// Start mock upstream
+	upstreamListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock upstream: %v", err)
+	}
+	defer upstreamListener.Close()
+
+	go func() {
+		for {
+			conn, err := upstreamListener.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				time.Sleep(5 * time.Second)
+			}(conn)
+		}
+	}()
+
+	// Get free port for web server
+	webListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to get free port for web: %v", err)
+	}
+	webPort := webListener.Addr().(*net.TCPAddr).Port
+	webListener.Close()
+
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: upstreamListener.Addr().(*net.TCPAddr).Port,
+		ListenPort:   0,
+		MaxClients:   10,
+		WebPort:      webPort,
+	}
+
+	proxyListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to get free port: %v", err)
+	}
+	cfg.ListenPort = proxyListener.Addr().(*net.TCPAddr).Port
+	proxyListener.Close()
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+
+	err = p.Start()
+	if err != nil {
+		t.Fatalf("Failed to start proxy: %v", err)
+	}
+	defer p.Stop()
+
+	webServer := NewServer(cfg, p, log)
+
+	// Start web server
+	err = webServer.Start()
+	if err != nil {
+		t.Fatalf("Failed to start web server: %v", err)
+	}
+
+	// Give server time to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify server is accessible
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/api/health", webPort))
+	if err != nil {
+		t.Fatalf("Failed to access web server: %v", err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	// Stop web server
+	webServer.Stop()
+
+	// Give server time to stop
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify server is no longer accessible
+	_, err = http.Get(fmt.Sprintf("http://127.0.0.1:%d/api/health", webPort))
+	if err == nil {
+		t.Error("Expected error after server stop, but got none")
+	}
+}
+
+func TestServerStop_NilServer(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	// Stop without Start should not panic
+	webServer.Stop()
+}
+
+type noFlusher struct {
+	http.ResponseWriter
+}
+
+func TestHandleEvents_NoFlusher(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	w := &noFlusher{httptest.NewRecorder()}
+
+	webServer.handleEvents(w, req)
+
+	// Check response (should be error because no Flusher support)
+	recorder := w.ResponseWriter.(*httptest.ResponseRecorder)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 500, got %d", recorder.Code)
+	}
+}
+
+type mockFlusher struct {
+	*httptest.ResponseRecorder
+	flushed int
+}
+
+func (m *mockFlusher) Flush() {
+	m.flushed++
+}
+
+func TestHandleEvents_SSE(t *testing.T) {
+	// Start mock upstream
+	upstreamListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock upstream: %v", err)
+	}
+	defer upstreamListener.Close()
+
+	go func() {
+		conn, err := upstreamListener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		time.Sleep(5 * time.Second)
+	}()
+
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: upstreamListener.Addr().(*net.TCPAddr).Port,
+		ListenPort:   0,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	proxyListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to get free port: %v", err)
+	}
+	cfg.ListenPort = proxyListener.Addr().(*net.TCPAddr).Port
+	proxyListener.Close()
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+
+	err = p.Start()
+	if err != nil {
+		t.Fatalf("Failed to start proxy: %v", err)
+	}
+	defer p.Stop()
+
+	time.Sleep(200 * time.Millisecond)
+
+	webServer := NewServer(cfg, p, log)
+
+	// Add some log messages to buffer
+	webServer.broadcastLog("buffered message 1")
+	webServer.broadcastLog("buffered message 2")
+
+	// Create a context that can be cancelled
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx)
+	w := &mockFlusher{ResponseRecorder: httptest.NewRecorder()}
+
+	// Run handleEvents in a goroutine
+	done := make(chan bool)
+	go func() {
+		webServer.handleEvents(w, req)
+		done <- true
+	}()
+
+	// Give it some time to process
+	time.Sleep(100 * time.Millisecond)
+
+	// Cancel the context to stop the handler
+	cancel()
+
+	select {
+	case <-done:
+		// Good
+	case <-time.After(1 * time.Second):
+		t.Fatal("handleEvents didn't return after context cancel")
+	}
+
+	// Check headers
+	resp := w.Result()
+	if resp.Header.Get("Content-Type") != "text/event-stream; charset=utf-8" {
+		t.Errorf("Expected Content-Type 'text/event-stream; charset=utf-8', got '%s'", resp.Header.Get("Content-Type"))
+	}
+	if resp.Header.Get("Cache-Control") != "no-cache" {
+		t.Errorf("Expected Cache-Control 'no-cache', got '%s'", resp.Header.Get("Cache-Control"))
+	}
+
+	// Check that Flush was called
+	if w.flushed == 0 {
+		t.Error("Expected Flush to be called")
+	}
+
+	// Check response body contains SSE events
+	body := w.Body.String()
+	if !strings.Contains(body, "event: status") {
+		t.Error("Expected 'event: status' in response")
+	}
+	if !strings.Contains(body, "event: log") {
+		t.Error("Expected 'event: log' in response")
+	}
+	if !strings.Contains(body, "buffered message 1") {
+		t.Error("Expected buffered message 1 in response")
+	}
+}
+
+func TestHandleEvents_ClientRegistration(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "192.168.255.255",
+		UpstreamPort: 9999,
+		ListenPort:   0,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	proxyListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to get free port: %v", err)
+	}
+	cfg.ListenPort = proxyListener.Addr().(*net.TCPAddr).Port
+	proxyListener.Close()
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+
+	err = p.Start()
+	if err != nil {
+		t.Fatalf("Failed to start proxy: %v", err)
+	}
+	defer p.Stop()
+
+	webServer := NewServer(cfg, p, log)
+
+	// Check initial client count
+	webServer.clientsMu.Lock()
+	initialCount := len(webServer.clients)
+	webServer.clientsMu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx)
+	w := &mockFlusher{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan bool)
+	go func() {
+		webServer.handleEvents(w, req)
+		done <- true
+	}()
+
+	// Give handler time to register
+	time.Sleep(50 * time.Millisecond)
+
+	// Check client was registered
+	webServer.clientsMu.Lock()
+	afterStartCount := len(webServer.clients)
+	webServer.clientsMu.Unlock()
+
+	if afterStartCount != initialCount+1 {
+		t.Errorf("Expected client count %d, got %d", initialCount+1, afterStartCount)
+	}
+
+	// Cancel to stop handler
+	cancel()
+
+	<-done
+
+	// Check client was unregistered
+	webServer.clientsMu.Lock()
+	afterStopCount := len(webServer.clients)
+	webServer.clientsMu.Unlock()
+
+	if afterStopCount != initialCount {
+		t.Errorf("Expected client count %d after stop, got %d", initialCount, afterStopCount)
+	}
+}
+
+func TestHandleInject_HexWithNewlines(t *testing.T) {
+	// Start mock upstream
+	upstreamListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock upstream: %v", err)
+	}
+	defer upstreamListener.Close()
+
+	go func() {
+		conn, err := upstreamListener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		time.Sleep(5 * time.Second)
+	}()
+
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: upstreamListener.Addr().(*net.TCPAddr).Port,
+		ListenPort:   0,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	proxyListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to get free port: %v", err)
+	}
+	cfg.ListenPort = proxyListener.Addr().(*net.TCPAddr).Port
+	proxyListener.Close()
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+
+	err = p.Start()
+	if err != nil {
+		t.Fatalf("Failed to start proxy: %v", err)
+	}
+	defer p.Stop()
+
+	time.Sleep(200 * time.Millisecond)
+
+	webServer := NewServer(cfg, p, log)
+
+	// Hex with newlines
+	body := `{"target": "upstream", "format": "hex", "data": "48454C4C4F\n574F524C44"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/inject", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	webServer.handleInject(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Errorf("Expected status 200, got %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+}
+
+func TestHealthEndpoint_Unhealthy(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "192.168.255.255",
+		UpstreamPort: 9999,
+		ListenPort:   0,
+		MaxClients:   10,
+		LogPackets:   false,
+		WebPort:      18080,
+	}
+
+	// Don't get a free port - use invalid one
+	cfg.ListenPort = 99999 // Invalid port
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+
+	// Don't start proxy - it won't be listening
+	webServer := NewServer(cfg, p, log)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	w := httptest.NewRecorder()
+
+	webServer.handleHealth(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	// Should return 503 when not listening
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("Expected status 503, got %d", resp.StatusCode)
+	}
+
+	var health HealthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if health.Status != HealthStatusUnhealthy {
+		t.Errorf("Expected status 'unhealthy', got '%s'", health.Status)
+	}
+}
+
+func TestNewServer(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	if webServer.config != cfg {
+		t.Error("Config not set correctly")
+	}
+	if webServer.proxy != p {
+		t.Error("Proxy not set correctly")
+	}
+	if webServer.logger != log {
+		t.Error("Logger not set correctly")
+	}
+	if webServer.clients == nil {
+		t.Error("Clients map not initialized")
+	}
+	if webServer.logBuffer == nil {
+		t.Error("Log buffer not initialized")
+	}
+}
+
+func TestHandleInject_Downstream(t *testing.T) {
+	// Start mock upstream
+	upstreamListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock upstream: %v", err)
+	}
+	defer upstreamListener.Close()
+
+	go func() {
+		for {
+			conn, err := upstreamListener.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				time.Sleep(5 * time.Second)
+			}(conn)
+		}
+	}()
+
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: upstreamListener.Addr().(*net.TCPAddr).Port,
+		ListenPort:   0,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	proxyListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to get free port: %v", err)
+	}
+	proxyAddr := proxyListener.Addr().String()
+	cfg.ListenPort = proxyListener.Addr().(*net.TCPAddr).Port
+	proxyListener.Close()
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+
+	err = p.Start()
+	if err != nil {
+		t.Fatalf("Failed to start proxy: %v", err)
+	}
+	defer p.Stop()
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Connect a client to receive downstream data
+	client, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Failed to connect client: %v", err)
+	}
+	defer client.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	webServer := NewServer(cfg, p, log)
+
+	body := `{"target": "downstream", "format": "ascii", "data": "Hello Client"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/inject", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	webServer.handleInject(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Errorf("Expected status 200, got %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 }
