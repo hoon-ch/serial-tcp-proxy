@@ -5,7 +5,14 @@
 
 A TCP proxy server that sits between Serial-to-TCP converters (e.g., Elfin-EW11) and clients (e.g., Home Assistant).
 
-[한국어 문서 (Korean)](docs/README_ko.md)
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Configuration Guide](docs/CONFIGURATION.md) | Environment variables, deployment options |
+| [API Reference](docs/API.md) | REST API endpoints and examples |
+| [Contributing Guide](docs/CONTRIBUTING.md) | Development setup, testing, code style |
+| [한국어 문서](docs/README_ko.md) | Korean documentation |
 
 ## Features
 
@@ -17,12 +24,6 @@ A TCP proxy server that sits between Serial-to-TCP converters (e.g., Elfin-EW11)
 - **Home Assistant Add-on**: Easy deployment as HA Add-on
 - **Web UI**: Real-time monitoring dashboard with packet inspector
 - **Health Check Endpoint**: Container orchestration support (Docker, Kubernetes)
-
-## Use Cases
-
-- Monitor packets while Home Assistant is connected to EW11
-- Use debugging tools without disabling HA integration
-- Multiple clients receiving the same RS-485 bus data
 
 ## Architecture
 
@@ -40,219 +41,106 @@ A TCP proxy server that sits between Serial-to-TCP converters (e.g., Elfin-EW11)
                                   └─────────────────┘     └──────────────┘
 ```
 
-## Installation
+## Quick Start
 
-### Home Assistant Add-on
-
-1. Add repository to Home Assistant Add-on Store:
-   ```
-   https://github.com/hoon-ch/serial-tcp-proxy
-   ```
-
-2. Install "Serial TCP Proxy" Add-on
-
-3. Configure settings:
-   ```yaml
-   upstream_host: "192.168.0.100"  # EW11 IP address
-   upstream_port: 8899              # EW11 port
-   listen_port: 18899               # Proxy listening port
-   max_clients: 10                  # Maximum client count
-   log_packets: false               # Enable packet logging
-   log_file: "/data/packets.log"    # Log file path
-   ```
-
-4. Start the Add-on
-
-### Standalone
-
-Configure via environment variables:
+### Docker (Recommended)
 
 ```bash
-export UPSTREAM_HOST=192.168.50.143
-export UPSTREAM_PORT=8899
-export LISTEN_PORT=18899
-export MAX_CLIENTS=10
-export LOG_PACKETS=true
-export LOG_FILE=/tmp/packets.log
-
-./serial-tcp-proxy
-```
-
-### Docker
-
-```bash
-docker pull ghcr.io/hoon-ch/serial-tcp-proxy:latest
-
 docker run -d \
   --name serial-tcp-proxy \
   --network host \
   -e UPSTREAM_HOST=192.168.50.143 \
   -e UPSTREAM_PORT=8899 \
   -e LISTEN_PORT=18899 \
-  -e LOG_PACKETS=true \
   ghcr.io/hoon-ch/serial-tcp-proxy:latest
 ```
 
-## Configuration
+### Home Assistant Add-on
 
-| Environment Variable | Description | Default |
-|---------------------|-------------|---------|
-| `UPSTREAM_HOST` | Serial-TCP converter IP address | Required |
-| `UPSTREAM_PORT` | Serial-TCP converter port | 8899 |
-| `LISTEN_PORT` | Proxy listening port | 18899 |
-| `MAX_CLIENTS` | Maximum simultaneous clients | 10 |
-| `LOG_PACKETS` | Enable packet logging | false |
-| `LOG_FILE` | Packet log file path | /data/packets.log |
-| `WEB_PORT` | Web UI port | 18080 |
-| `WEB_AUTH_ENABLED` | Enable Web UI authentication | false |
-| `WEB_AUTH_USERNAME` | Basic auth username | Required if auth enabled |
-| `WEB_AUTH_PASSWORD` | Basic auth password | Required if auth enabled |
+1. Add repository: `https://github.com/hoon-ch/serial-tcp-proxy`
+2. Install "Serial TCP Proxy" Add-on
+3. Configure and start
 
-## Web UI Authentication
-
-The Web UI supports optional Basic Authentication to secure access when exposed outside Home Assistant Ingress.
-
-### Configuration
+### Standalone
 
 ```bash
-export WEB_AUTH_ENABLED=true
-export WEB_AUTH_USERNAME=admin
-export WEB_AUTH_PASSWORD=your-secure-password
+export UPSTREAM_HOST=192.168.50.143
+export UPSTREAM_PORT=8899
+export LISTEN_PORT=18899
+
+./serial-tcp-proxy
 ```
 
-### Protected Endpoints
+See [Configuration Guide](docs/CONFIGURATION.md) for detailed setup options.
 
-| Endpoint | Authentication Required |
-|----------|------------------------|
-| `/api/health` | No (for health probes) |
-| `/api/status` | Yes |
-| `/api/config` | Yes |
-| `/api/events` | Yes |
-| `/api/inject` | Yes |
-| `/` (static files) | Yes |
+## Configuration
 
-### Security Considerations
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `UPSTREAM_HOST` | Serial-TCP converter IP | Required |
+| `UPSTREAM_PORT` | Serial-TCP converter port | `8899` |
+| `LISTEN_PORT` | Proxy listening port | `18899` |
+| `MAX_CLIENTS` | Max simultaneous clients | `10` |
+| `LOG_PACKETS` | Enable packet logging | `false` |
+| `WEB_PORT` | Web UI port | `18080` |
+| `WEB_AUTH_ENABLED` | Enable Web UI auth | `false` |
 
-> **Important**: Basic Authentication transmits credentials encoded in Base64, which is **not encrypted**. When exposing the Web UI outside of a trusted network:
->
-> - **Always use HTTPS** (TLS) to encrypt traffic
-> - Use a reverse proxy (e.g., nginx, Traefik, Caddy) with TLS termination
-> - Consider using strong, unique passwords
-> - Failed authentication attempts are logged for security monitoring
-
-## Log Format
-
-```
-2024-01-15T10:30:45.123Z [INFO] Starting Serial TCP Proxy v1.0.0
-2024-01-15T10:30:45.130Z [INFO] Connected to upstream
-2024-01-15T10:30:50.000Z [INFO] Client connected: 192.168.50.10:52341 (total: 1)
-2024-01-15T10:30:50.100Z [PKT] [UP→] f7 0e 11 41 01 01 5e 02 (8 bytes)
-2024-01-15T10:30:50.150Z [PKT] [→UP] f7 0e 11 41 01 00 5f 00 (8 bytes) from client#1
-```
-
-- `[UP→]`: Upstream → Client direction
-- `[→UP]`: Client → Upstream direction
-
-## Routing Rules
-
-1. **Upstream → Clients**: Broadcast to all connected clients
-2. **Client → Upstream**: Forward to upstream only (not to other clients)
+See [Configuration Guide](docs/CONFIGURATION.md) for all options.
 
 ## Web UI
 
-The proxy includes a built-in web interface for monitoring and debugging.
+Access the built-in web interface at `http://localhost:18080`.
 
-Access at `http://localhost:18080` (or configured WEB_PORT).
-
-When running as a Home Assistant Add-on, the Web UI is accessible via Ingress (sidebar panel).
-
-### Features
-
-- **Dashboard**: Real-time status monitoring (upstream connection, client count, uptime)
-- **Live Logs**: Stream logs in real-time with pause/clear functionality
-- **Packet Inspector**:
-  - View packets in HEX and ASCII format
-  - Filter and sort packets
-  - Compare two packets (diff view)
-  - Data inspector (Binary, Int8/16/32, Float32, String interpretation)
-  - Export packets to file
-- **Packet Injection**: Send test packets to upstream or broadcast to downstream clients
-- **Dark/Light Theme**: Toggle between themes
+**Features:**
+- Real-time status monitoring
+- Live log streaming
+- Packet inspector with HEX/ASCII view
+- Packet injection for testing
+- Dark/Light theme
 
 ![Web UI Screenshot](docs/images/webui.png)
 
+## API
+
+The proxy provides a REST API for monitoring and control.
+
+```bash
+# Health check (no auth required)
+curl http://localhost:18080/api/health
+
+# Status (auth required if enabled)
+curl -u admin:secret http://localhost:18080/api/status
+
+# Inject packet
+curl -u admin:secret -X POST \
+  -d '{"target":"upstream","format":"hex","data":"f70e114101015e02"}' \
+  http://localhost:18080/api/inject
+```
+
+See [API Reference](docs/API.md) for complete documentation.
+
 ## Health Check
 
-The proxy provides a health check endpoint for container orchestration platforms.
-
-### Endpoint
-
-`GET /api/health`
-
-### Response
-
 ```json
+GET /api/health
+
 {
-  "status": "healthy|degraded|unhealthy",
+  "status": "healthy",
   "version": "1.1.1",
   "uptime": 3600,
   "checks": {
-    "upstream": {
-      "status": "healthy|unhealthy",
-      "connected": true,
-      "address": "192.168.50.143:8899",
-      "last_connected": "2025-11-28T00:00:00Z"
-    },
-    "clients": {
-      "status": "healthy",
-      "count": 2,
-      "max": 10
-    },
-    "web_server": {
-      "status": "healthy",
-      "port": 18080
-    }
-  },
-  "timestamp": "2025-11-28T00:00:00Z"
+    "upstream": {"status": "healthy", "connected": true},
+    "clients": {"status": "healthy", "count": 2, "max": 10},
+    "web_server": {"status": "healthy", "port": 18080}
+  }
 }
 ```
 
-### Health Status
-
 | Status | Description | HTTP Code |
 |--------|-------------|-----------|
-| `healthy` | Upstream connected and proxy listening | 200 |
-| `degraded` | Upstream disconnected but proxy still running (auto-reconnecting) | 200 |
+| `healthy` | Upstream connected | 200 |
+| `degraded` | Upstream disconnected, auto-reconnecting | 200 |
 | `unhealthy` | Proxy not listening | 503 |
-
-### Docker HEALTHCHECK
-
-The Docker image includes a built-in health check:
-
-```dockerfile
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:${WEB_PORT:-18080}/api/health || exit 1
-```
-
-### Kubernetes
-
-Example liveness and readiness probes:
-
-```yaml
-livenessProbe:
-  httpGet:
-    path: /api/health
-    port: 18080
-  initialDelaySeconds: 5
-  periodSeconds: 30
-
-readinessProbe:
-  httpGet:
-    path: /api/health
-    port: 18080
-  initialDelaySeconds: 5
-  periodSeconds: 10
-```
 
 ## Building
 
@@ -266,24 +154,11 @@ go build -o serial-tcp-proxy ./cmd/serial-tcp-proxy
 # Run all tests
 go test -v ./...
 
-# Run tests with coverage
+# Run with coverage
 go test -cover ./...
-
-# Generate coverage report
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out -o coverage.html
 ```
 
-### Test Coverage
-
-| Package | Coverage |
-|---------|----------|
-| internal/web | 92.4% |
-| internal/client | 93.9% |
-| internal/upstream | 86.0% |
-| internal/logger | 83.3% |
-| internal/config | 72.7% |
-| internal/proxy | 70.8% |
+See [Contributing Guide](docs/CONTRIBUTING.md) for development setup.
 
 ## Compatible Devices
 
