@@ -13,7 +13,7 @@ import { exportPackets } from './modules/export.js';
 import { initInjection } from './modules/injection.js';
 import { updateInspector, renderDiff } from './modules/inspector.js';
 import { initTheme } from './modules/theme.js';
-import { apiUrl } from './modules/api.js';
+import { apiUrl, wsUrl } from './modules/api.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize UI Modules
@@ -25,8 +25,117 @@ document.addEventListener('DOMContentLoaded', () => {
     let startTime = null;
     let isPaused = false;
     let isPacketsPaused = false;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    let reconnectTimeout = null;
 
-    // Status & Uptime
+    // Update connection status UI
+    function setConnectionStatus(connected) {
+        const statusBadge = document.getElementById('connection-status');
+        const statusText = statusBadge.querySelector('.text');
+        if (connected) {
+            statusBadge.classList.remove('disconnected');
+            statusBadge.classList.add('connected');
+            statusText.textContent = 'Connected';
+        } else {
+            statusBadge.classList.remove('connected');
+            statusBadge.classList.add('disconnected');
+            statusText.textContent = 'Disconnected';
+        }
+    }
+
+    // Handle incoming message (works for both WebSocket and SSE)
+    function handleMessage(type, data) {
+        if (type === 'status') {
+            const start = updateStatus(data);
+            if (start && !startTime) {
+                startTime = start;
+                setInterval(() => updateUptime(startTime), 1000);
+            }
+        } else if (type === 'log') {
+            const logLine = typeof data === 'string' ? data : JSON.stringify(data);
+            if (logLine.includes('[PKT]')) {
+                if (!isPacketsPaused) {
+                    addPacketEntry(logLine);
+                }
+            } else {
+                if (!isPaused) {
+                    addLogEntry(logLine);
+                }
+            }
+        }
+    }
+
+    // WebSocket connection
+    function connectWebSocket() {
+        const ws = new WebSocket(wsUrl('/api/ws'));
+
+        ws.onopen = () => {
+            console.log('WebSocket connected');
+            setConnectionStatus(true);
+            reconnectAttempts = 0;
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                handleMessage(msg.type, msg.data);
+            } catch (err) {
+                console.error('Failed to parse WebSocket message:', err);
+            }
+        };
+
+        ws.onerror = (err) => {
+            console.error('WebSocket error:', err);
+        };
+
+        ws.onclose = () => {
+            console.log('WebSocket disconnected');
+            setConnectionStatus(false);
+
+            // Reconnect with exponential backoff
+            if (reconnectAttempts < maxReconnectAttempts) {
+                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+                reconnectAttempts++;
+                console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
+                reconnectTimeout = setTimeout(connectWebSocket, delay);
+            } else {
+                console.log('Max reconnect attempts reached, falling back to SSE');
+                connectSSE();
+            }
+        };
+
+        return ws;
+    }
+
+    // SSE fallback connection
+    function connectSSE() {
+        console.log('Connecting via SSE fallback');
+        const evtSource = new EventSource(apiUrl('/api/events'));
+
+        evtSource.onopen = () => {
+            setConnectionStatus(true);
+        };
+
+        evtSource.addEventListener('status', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                handleMessage('status', data);
+            } catch (err) {
+                console.error('Failed to parse SSE status:', err);
+            }
+        });
+
+        evtSource.addEventListener('log', (e) => {
+            handleMessage('log', e.data);
+        });
+
+        evtSource.onerror = () => {
+            setConnectionStatus(false);
+        };
+    }
+
+    // Status & Uptime - initial fetch
     fetch(apiUrl('/api/status'))
         .then(response => response.json())
         .then(data => {
@@ -38,38 +147,8 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(err => console.error('Failed to fetch initial status:', err));
 
-    // SSE
-    const evtSource = new EventSource(apiUrl('/api/events'));
-
-    evtSource.addEventListener('status', (e) => {
-        const data = JSON.parse(e.data);
-        const start = updateStatus(data);
-        if (start && !startTime) {
-            startTime = start;
-            setInterval(() => updateUptime(startTime), 1000);
-        }
-    });
-
-    evtSource.addEventListener('log', (e) => {
-        const logLine = e.data;
-        if (logLine.includes('[PKT]')) {
-            if (!isPacketsPaused) {
-                addPacketEntry(logLine);
-            }
-        } else {
-            if (!isPaused) {
-                addLogEntry(logLine);
-            }
-        }
-    });
-
-    evtSource.onerror = () => {
-        const statusBadge = document.getElementById('connection-status');
-        const statusText = statusBadge.querySelector('.text');
-        statusBadge.classList.remove('connected');
-        statusBadge.classList.add('disconnected');
-        statusText.textContent = 'Disconnected';
-    };
+    // Start WebSocket connection (with SSE fallback)
+    connectWebSocket();
 
     // Global Controls
     document.getElementById('clear-logs').addEventListener('click', clearLogs);

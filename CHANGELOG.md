@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.5] - 2025-11-28
+
+### Added
+- WebSocket support for real-time events (`/api/ws` endpoint)
+  - More reliable than SSE through reverse proxies like Home Assistant Ingress
+  - Automatic reconnection with exponential backoff
+  - Falls back to SSE if WebSocket connection fails
+  - Ping/pong mechanism to keep connections alive
+
+### Changed
+- Frontend now uses WebSocket by default with SSE as fallback
+
 ## [1.1.4] - 2025-11-28
 
 ### Fixed

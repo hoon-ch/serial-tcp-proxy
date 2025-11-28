@@ -11,3 +11,10 @@ export const basePath = getBasePath();
 export function apiUrl(endpoint) {
     return `${basePath}${endpoint}`;
 }
+
+// Get WebSocket URL with proper protocol (ws/wss) and path
+export function wsUrl(endpoint) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    return `${protocol}//${host}${basePath}${endpoint}`;
+}

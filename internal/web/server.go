@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/hoon-ch/serial-tcp-proxy/internal/config"
 	"github.com/hoon-ch/serial-tcp-proxy/internal/logger"
 	"github.com/hoon-ch/serial-tcp-proxy/internal/proxy"
@@ -21,6 +22,22 @@ import (
 //go:embed static
 var staticFS embed.FS
 
+// WebSocket upgrader with permissive origin check for Home Assistant Ingress
+var wsUpgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Allow all origins for Home Assistant Ingress compatibility
+	},
+}
+
+// wsClient represents a WebSocket client connection
+type wsClient struct {
+	conn   *websocket.Conn
+	send   chan []byte
+	server *Server
+}
+
 type Server struct {
 	config      *config.Config
 	proxy       *proxy.Server
@@ -28,6 +45,8 @@ type Server struct {
 	httpServer  *http.Server
 	clients     map[chan string]bool
 	clientsMu   sync.Mutex
+	wsClients   map[*wsClient]bool
+	wsClientsMu sync.Mutex
 	logBuffer   []string
 	logBufferMu sync.Mutex
 }
@@ -38,6 +57,7 @@ func NewServer(cfg *config.Config, p *proxy.Server, l *logger.Logger) *Server {
 		proxy:     p,
 		logger:    l,
 		clients:   make(map[chan string]bool),
+		wsClients: make(map[*wsClient]bool),
 		logBuffer: make([]string, 0, 1000),
 	}
 
@@ -104,7 +124,8 @@ func (s *Server) Start() error {
 	// Protected endpoints require authentication when enabled
 	mux.HandleFunc("/api/status", s.authMiddleware(s.handleStatus))
 	mux.HandleFunc("/api/config", s.authMiddleware(s.handleConfig))
-	mux.HandleFunc("/api/events", s.authMiddleware(s.handleEvents))
+	mux.HandleFunc("/api/events", s.authMiddleware(s.handleEvents)) // Legacy SSE endpoint
+	mux.HandleFunc("/api/ws", s.authMiddleware(s.handleWebSocket))  // WebSocket endpoint
 	mux.HandleFunc("/api/inject", s.authMiddleware(s.handleInject))
 
 	// Static files (protected)
@@ -411,14 +432,158 @@ func (s *Server) broadcastLog(msg string) {
 	}
 	s.logBufferMu.Unlock()
 
+	// Broadcast to SSE clients
 	s.clientsMu.Lock()
-	defer s.clientsMu.Unlock()
-
 	for clientChan := range s.clients {
 		select {
 		case clientChan <- msg:
 		default:
 			// Drop message if client is too slow
+		}
+	}
+	s.clientsMu.Unlock()
+
+	// Broadcast to WebSocket clients
+	s.broadcastToWebSocket("log", msg)
+}
+
+// WebSocket message types
+type wsMessage struct {
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
+}
+
+// handleWebSocket handles WebSocket connections for real-time events
+func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		s.logger.Error("WebSocket upgrade failed: %v", err)
+		return
+	}
+
+	client := &wsClient{
+		conn:   conn,
+		send:   make(chan []byte, 256),
+		server: s,
+	}
+
+	// Register client
+	s.wsClientsMu.Lock()
+	s.wsClients[client] = true
+	s.wsClientsMu.Unlock()
+
+	// Send initial status
+	if statusData, err := json.Marshal(s.proxy.GetStatus()); err == nil {
+		msg := wsMessage{Type: "status", Data: json.RawMessage(statusData)}
+		if data, err := json.Marshal(msg); err == nil {
+			client.send <- data
+		}
+	}
+
+	// Send buffered logs
+	s.logBufferMu.Lock()
+	for _, logMsg := range s.logBuffer {
+		msg := wsMessage{Type: "log", Data: logMsg}
+		if data, err := json.Marshal(msg); err == nil {
+			client.send <- data
+		}
+	}
+	s.logBufferMu.Unlock()
+
+	// Start goroutines for reading and writing
+	go client.writePump()
+	go client.readPump()
+}
+
+// writePump pumps messages from the send channel to the WebSocket connection
+func (c *wsClient) writePump() {
+	ticker := time.NewTicker(2 * time.Second) // Status update interval
+	pingTicker := time.NewTicker(30 * time.Second)
+	defer func() {
+		ticker.Stop()
+		pingTicker.Stop()
+		c.conn.Close()
+		c.server.wsClientsMu.Lock()
+		delete(c.server.wsClients, c)
+		c.server.wsClientsMu.Unlock()
+	}()
+
+	for {
+		select {
+		case message, ok := <-c.send:
+			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if !ok {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				return
+			}
+		case <-ticker.C:
+			// Send periodic status update
+			if statusData, err := json.Marshal(c.server.proxy.GetStatus()); err == nil {
+				msg := wsMessage{Type: "status", Data: json.RawMessage(statusData)}
+				if data, err := json.Marshal(msg); err == nil {
+					c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+					if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+						return
+					}
+				}
+			}
+		case <-pingTicker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
+// readPump pumps messages from the WebSocket connection (handles pongs and close)
+func (c *wsClient) readPump() {
+	defer func() {
+		c.server.wsClientsMu.Lock()
+		delete(c.server.wsClients, c)
+		c.server.wsClientsMu.Unlock()
+		c.conn.Close()
+	}()
+
+	c.conn.SetReadLimit(512)
+	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	for {
+		_, _, err := c.conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				c.server.logger.Error("WebSocket error: %v", err)
+			}
+			break
+		}
+	}
+}
+
+// broadcastToWebSocket sends a message to all WebSocket clients
+func (s *Server) broadcastToWebSocket(msgType string, data interface{}) {
+	msg := wsMessage{Type: msgType, Data: data}
+	jsonData, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+
+	s.wsClientsMu.Lock()
+	defer s.wsClientsMu.Unlock()
+
+	for client := range s.wsClients {
+		select {
+		case client.send <- jsonData:
+		default:
+			// Client too slow, close connection
+			close(client.send)
+			delete(s.wsClients, client)
 		}
 	}
 }
