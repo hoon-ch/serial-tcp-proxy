@@ -8,7 +8,7 @@ ARG VERSION=dev
 WORKDIR /app
 
 # Copy go mod files first for better caching
-COPY go.mod ./
+COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source code
