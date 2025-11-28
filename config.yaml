@@ -2,6 +2,7 @@ name: "Serial TCP Proxy"
 description: "TCP proxy for Serial-to-TCP converters (EW11, etc.) with multi-client support and packet logging"
 version: "1.1.2"
 slug: "serial_tcp_proxy"
+image: ghcr.io/hoon-ch/{arch}-serial-tcp-proxy
 arch:
   - aarch64
   - armv7
