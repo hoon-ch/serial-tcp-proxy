@@ -1,6 +1,6 @@
 name: "Serial TCP Proxy"
 description: "TCP proxy for Serial-to-TCP converters (EW11, etc.) with multi-client support and packet logging"
-version: "1.1.0"
+version: "1.1.1"
 slug: "serial_tcp_proxy"
 arch:
   - aarch64
