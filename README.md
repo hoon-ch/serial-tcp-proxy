@@ -104,6 +104,41 @@ docker run -d \
 | `LOG_PACKETS` | Enable packet logging | false |
 | `LOG_FILE` | Packet log file path | /data/packets.log |
 | `WEB_PORT` | Web UI port | 18080 |
+| `WEB_AUTH_ENABLED` | Enable Web UI authentication | false |
+| `WEB_AUTH_USERNAME` | Basic auth username | Required if auth enabled |
+| `WEB_AUTH_PASSWORD` | Basic auth password | Required if auth enabled |
+
+## Web UI Authentication
+
+The Web UI supports optional Basic Authentication to secure access when exposed outside Home Assistant Ingress.
+
+### Configuration
+
+```bash
+export WEB_AUTH_ENABLED=true
+export WEB_AUTH_USERNAME=admin
+export WEB_AUTH_PASSWORD=your-secure-password
+```
+
+### Protected Endpoints
+
+| Endpoint | Authentication Required |
+|----------|------------------------|
+| `/api/health` | No (for health probes) |
+| `/api/status` | Yes |
+| `/api/config` | Yes |
+| `/api/events` | Yes |
+| `/api/inject` | Yes |
+| `/` (static files) | Yes |
+
+### Security Considerations
+
+> **Important**: Basic Authentication transmits credentials encoded in Base64, which is **not encrypted**. When exposing the Web UI outside of a trusted network:
+>
+> - **Always use HTTPS** (TLS) to encrypt traffic
+> - Use a reverse proxy (e.g., nginx, Traefik, Caddy) with TLS termination
+> - Consider using strong, unique passwords
+> - Failed authentication attempts are logged for security monitoring
 
 ## Log Format
 

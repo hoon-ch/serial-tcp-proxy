@@ -9,14 +9,17 @@ import (
 )
 
 type Config struct {
-	UpstreamHost   string        `json:"upstream_host"`
-	UpstreamPort   int           `json:"upstream_port"`
-	ListenPort     int           `json:"listen_port"`
-	MaxClients     int           `json:"max_clients"`
-	LogPackets     bool          `json:"log_packets"`
-	LogFile        string        `json:"log_file"`
-	WebPort        int           `json:"web_port"`
-	ReconnectDelay time.Duration `json:"-"`
+	UpstreamHost    string        `json:"upstream_host"`
+	UpstreamPort    int           `json:"upstream_port"`
+	ListenPort      int           `json:"listen_port"`
+	MaxClients      int           `json:"max_clients"`
+	LogPackets      bool          `json:"log_packets"`
+	LogFile         string        `json:"log_file"`
+	WebPort         int           `json:"web_port"`
+	WebAuthEnabled  bool          `json:"web_auth_enabled"`
+	WebAuthUsername string        `json:"web_auth_username"`
+	WebAuthPassword string        `json:"web_auth_password"`
+	ReconnectDelay  time.Duration `json:"-"`
 }
 
 func Load() (*Config, error) {
@@ -74,6 +77,18 @@ func Load() (*Config, error) {
 		}
 	}
 
+	if webAuthEnabled := os.Getenv("WEB_AUTH_ENABLED"); webAuthEnabled != "" {
+		config.WebAuthEnabled = webAuthEnabled == "true" || webAuthEnabled == "1"
+	}
+
+	if webAuthUsername := os.Getenv("WEB_AUTH_USERNAME"); webAuthUsername != "" {
+		config.WebAuthUsername = webAuthUsername
+	}
+
+	if webAuthPassword := os.Getenv("WEB_AUTH_PASSWORD"); webAuthPassword != "" {
+		config.WebAuthPassword = webAuthPassword
+	}
+
 	// Validate required fields
 	if config.UpstreamHost == "" {
 		return nil, fmt.Errorf("UPSTREAM_HOST is required")
@@ -89,6 +104,16 @@ func Load() (*Config, error) {
 
 	if config.MaxClients <= 0 || config.MaxClients > 100 {
 		return nil, fmt.Errorf("MAX_CLIENTS must be between 1 and 100")
+	}
+
+	// Validate auth configuration
+	if config.WebAuthEnabled {
+		if config.WebAuthUsername == "" {
+			return nil, fmt.Errorf("WEB_AUTH_USERNAME is required when WEB_AUTH_ENABLED is true")
+		}
+		if config.WebAuthPassword == "" {
+			return nil, fmt.Errorf("WEB_AUTH_PASSWORD is required when WEB_AUTH_ENABLED is true")
+		}
 	}
 
 	return config, nil

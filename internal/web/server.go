@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"crypto/subtle"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
@@ -46,22 +47,72 @@ func NewServer(cfg *config.Config, p *proxy.Server, l *logger.Logger) *Server {
 	return s
 }
 
+// validateBasicAuth checks if the request has valid basic auth credentials.
+// Returns true if auth is disabled or credentials are valid.
+// Returns false if auth is enabled but credentials are missing or invalid.
+func (s *Server) validateBasicAuth(r *http.Request) bool {
+	if !s.config.WebAuthEnabled {
+		return true
+	}
+
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		return false
+	}
+
+	usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(s.config.WebAuthUsername)) == 1
+	passwordMatch := subtle.ConstantTimeCompare([]byte(password), []byte(s.config.WebAuthPassword)) == 1
+
+	return usernameMatch && passwordMatch
+}
+
+// sendUnauthorized sends a 401 Unauthorized response with WWW-Authenticate header
+func (s *Server) sendUnauthorized(w http.ResponseWriter, r *http.Request) {
+	s.logger.Warn("Authentication failed: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+	w.Header().Set("WWW-Authenticate", `Basic realm="Serial TCP Proxy"`)
+	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+}
+
+// authMiddleware wraps a handler with basic authentication
+func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.validateBasicAuth(r) {
+			s.sendUnauthorized(w, r)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// authHandler wraps an http.Handler with basic authentication
+func (s *Server) authHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.validateBasicAuth(r) {
+			s.sendUnauthorized(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
 	// API endpoints
+	// /api/health is public for health probes
 	mux.HandleFunc("/api/health", s.handleHealth)
-	mux.HandleFunc("/api/status", s.handleStatus)
-	mux.HandleFunc("/api/config", s.handleConfig)
-	mux.HandleFunc("/api/events", s.handleEvents)
-	mux.HandleFunc("/api/inject", s.handleInject)
+	// Protected endpoints require authentication when enabled
+	mux.HandleFunc("/api/status", s.authMiddleware(s.handleStatus))
+	mux.HandleFunc("/api/config", s.authMiddleware(s.handleConfig))
+	mux.HandleFunc("/api/events", s.authMiddleware(s.handleEvents))
+	mux.HandleFunc("/api/inject", s.authMiddleware(s.handleInject))
 
-	// Static files
+	// Static files (protected)
 	staticRoot, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		return err
 	}
-	mux.Handle("/", http.FileServer(http.FS(staticRoot)))
+	mux.Handle("/", s.authHandler(http.FileServer(http.FS(staticRoot))))
 
 	s.httpServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.config.WebPort),
