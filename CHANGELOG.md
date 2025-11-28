@@ -2,17 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.4] - 2025-11-28
+
+### Fixed
+- SSE event stream buffering issue with Home Assistant Ingress proxy
+  - Enhanced SSE headers for better proxy compatibility
+  - Added `X-Accel-Buffering: no` header to disable nginx buffering
+  - Added `Pragma`, `Expires` headers for comprehensive cache control
+  - Added `X-Content-Type-Options: nosniff` to prevent content sniffing
+  - Explicit `WriteHeader` call before first flush
+  - Added heartbeat mechanism (15s) to keep connections alive through proxies
+  - Events now delivered in real-time instead of batched
+
 ## [1.1.3] - 2025-11-28
 
 ### Added
 - Pre-built Docker images for Home Assistant add-on (faster installation)
   - Supports amd64, aarch64, armv7, i386 architectures
   - Images hosted on GitHub Container Registry (ghcr.io)
-
-### Fixed
-- SSE event stream buffering issue with Home Assistant Ingress proxy
-  - Added `X-Accel-Buffering: no` header to disable nginx buffering
-  - Events now delivered in real-time instead of batched
 
 ## [1.1.2] - 2025-11-28
 

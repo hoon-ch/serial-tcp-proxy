@@ -1463,11 +1463,14 @@ func TestHandleEvents_SSE(t *testing.T) {
 
 	// Check headers
 	resp := w.Result()
-	if resp.Header.Get("Content-Type") != "text/event-stream; charset=utf-8" {
-		t.Errorf("Expected Content-Type 'text/event-stream; charset=utf-8', got '%s'", resp.Header.Get("Content-Type"))
+	if resp.Header.Get("Content-Type") != "text/event-stream" {
+		t.Errorf("Expected Content-Type 'text/event-stream', got '%s'", resp.Header.Get("Content-Type"))
 	}
-	if resp.Header.Get("Cache-Control") != "no-cache" {
-		t.Errorf("Expected Cache-Control 'no-cache', got '%s'", resp.Header.Get("Cache-Control"))
+	if resp.Header.Get("Cache-Control") != "no-cache, no-store, must-revalidate" {
+		t.Errorf("Expected Cache-Control 'no-cache, no-store, must-revalidate', got '%s'", resp.Header.Get("Cache-Control"))
+	}
+	if resp.Header.Get("X-Accel-Buffering") != "no" {
+		t.Errorf("Expected X-Accel-Buffering 'no', got '%s'", resp.Header.Get("X-Accel-Buffering"))
 	}
 
 	// Check that Flush was called

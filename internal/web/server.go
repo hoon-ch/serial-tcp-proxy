@@ -327,13 +327,20 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set headers for SSE
-	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
+	// Set headers for SSE - critical for proxy compatibility
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	// Disable buffering for nginx/Home Assistant Ingress proxy
-	w.Header().Set("X-Accel-Buffering", "no")
+	// Disable buffering for various proxies
+	w.Header().Set("X-Accel-Buffering", "no")           // nginx
+	w.Header().Set("X-Content-Type-Options", "nosniff") // Prevent content sniffing
+
+	// Explicitly send headers and flush immediately
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
 
 	// Create a channel for this client
 	clientChan := make(chan string, 10)
@@ -351,33 +358,43 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		close(clientChan)
 	}()
 
+	// Helper function to write and flush SSE event
+	writeEvent := func(event, data string) {
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data)
+		flusher.Flush()
+	}
+
 	// Send initial status
 	if statusData, err := json.Marshal(s.proxy.GetStatus()); err == nil {
-		fmt.Fprintf(w, "event: status\ndata: %s\n\n", statusData)
+		writeEvent("status", string(statusData))
 	}
-	flusher.Flush()
 
 	// Send buffered logs
 	s.logBufferMu.Lock()
 	for _, msg := range s.logBuffer {
-		fmt.Fprintf(w, "event: log\ndata: %s\n\n", msg)
+		writeEvent("log", msg)
 	}
 	s.logBufferMu.Unlock()
-	flusher.Flush()
 
-	// Periodic status update ticker
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
+	// Periodic status update ticker (2 seconds)
+	statusTicker := time.NewTicker(2 * time.Second)
+	defer statusTicker.Stop()
+
+	// Heartbeat ticker to keep connection alive through proxies (15 seconds)
+	heartbeatTicker := time.NewTicker(15 * time.Second)
+	defer heartbeatTicker.Stop()
 
 	for {
 		select {
 		case msg := <-clientChan:
-			fmt.Fprintf(w, "event: log\ndata: %s\n\n", msg)
-			flusher.Flush()
-		case <-ticker.C:
+			writeEvent("log", msg)
+		case <-statusTicker.C:
 			if statusData, err := json.Marshal(s.proxy.GetStatus()); err == nil {
-				fmt.Fprintf(w, "event: status\ndata: %s\n\n", statusData)
+				writeEvent("status", string(statusData))
 			}
+		case <-heartbeatTicker.C:
+			// Send comment as heartbeat to keep connection alive
+			fmt.Fprintf(w, ": heartbeat\n\n")
 			flusher.Flush()
 		case <-r.Context().Done():
 			return
