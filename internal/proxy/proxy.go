@@ -207,15 +207,35 @@ func (ps *Server) GetStatus() map[string]interface{} {
 		"upstream_state":    ps.upstream.GetState().String(),
 		"upstream_addr":     ps.config.UpstreamAddr(),
 		"listen_addr":       ps.config.ListenAddr(),
-		"connected_clients": ps.clients.Count(),
+		"connected_clients": ps.clients.TotalCount(),
 		"max_clients":       ps.config.MaxClients,
 		"start_time":        ps.startTime.Format(time.RFC3339),
 	}
 }
 
-// GetClientCount returns the number of connected clients
+// GetClientCount returns the total number of connected clients (TCP + Web)
 func (ps *Server) GetClientCount() int {
+	return ps.clients.TotalCount()
+}
+
+// GetTCPClientCount returns the number of TCP proxy clients
+func (ps *Server) GetTCPClientCount() int {
 	return ps.clients.Count()
+}
+
+// GetWebClientCount returns the number of web UI clients
+func (ps *Server) GetWebClientCount() int {
+	return ps.clients.WebClientCount()
+}
+
+// AddWebClient registers a web client connection
+func (ps *Server) AddWebClient() error {
+	return ps.clients.AddWebClient()
+}
+
+// RemoveWebClient unregisters a web client connection
+func (ps *Server) RemoveWebClient() {
+	ps.clients.RemoveWebClient()
 }
 
 // IsUpstreamConnected returns whether the upstream is connected

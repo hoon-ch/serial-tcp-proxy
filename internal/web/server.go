@@ -348,6 +348,12 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Register as web client (counts toward maxClients)
+	if err := s.proxy.AddWebClient(); err != nil {
+		http.Error(w, "Max clients reached", http.StatusServiceUnavailable)
+		return
+	}
+
 	// Set headers for SSE - critical for proxy compatibility
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -377,6 +383,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		delete(s.clients, clientChan)
 		s.clientsMu.Unlock()
 		close(clientChan)
+		s.proxy.RemoveWebClient()
 	}()
 
 	// Helper function to write and flush SSE event
@@ -455,6 +462,12 @@ type wsMessage struct {
 
 // handleWebSocket handles WebSocket connections for real-time events
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// Register as web client (counts toward maxClients)
+	if err := s.proxy.AddWebClient(); err != nil {
+		http.Error(w, "Max clients reached", http.StatusServiceUnavailable)
+		return
+	}
+
 	// Set response headers for proxy compatibility (Home Assistant Ingress)
 	responseHeader := http.Header{}
 	responseHeader.Set("X-Accel-Buffering", "no") // Disable nginx buffering
@@ -462,6 +475,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := wsUpgrader.Upgrade(w, r, responseHeader)
 	if err != nil {
 		s.logger.Error("WebSocket upgrade failed: %v", err)
+		s.proxy.RemoveWebClient()
 		return
 	}
 
@@ -510,6 +524,7 @@ func (c *wsClient) writePump() {
 		c.server.wsClientsMu.Lock()
 		delete(c.server.wsClients, c)
 		c.server.wsClientsMu.Unlock()
+		c.server.proxy.RemoveWebClient()
 	}()
 
 	for {
