@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.2.1] - 2025-11-29
 
 ### Fixed
 - **Potential deadlock in packet logging** causing Recv-Q accumulation
