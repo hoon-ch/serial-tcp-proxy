@@ -95,8 +95,14 @@ Access the built-in web interface at `http://localhost:18080`.
 - Real-time status monitoring
 - Live log streaming
 - Packet inspector with HEX/ASCII view
+  - Advanced filtering: `dir:up`, `len:>10`, `hex:f7 0e`, `ascii:hello`, `/regex/`
+  - Filter presets with save/load
+  - Virtual scrolling (10,000+ packets)
+  - Auto-scroll with "Go to Latest" button
+- Client management (view/disconnect clients)
 - Packet injection for testing
 - Dark/Light theme
+- Mobile responsive
 
 ![Web UI Screenshot](docs/images/webui.png)
 
