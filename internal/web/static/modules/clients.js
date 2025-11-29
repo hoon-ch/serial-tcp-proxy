@@ -1,4 +1,5 @@
 // Client management module
+import { apiUrl } from './api.js';
 
 const clientsCard = document.getElementById('clients-card');
 const clientsModal = document.getElementById('clients-modal');
@@ -30,7 +31,7 @@ function formatConnectedTime(isoString) {
 // Fetch and render clients
 async function fetchClients() {
     try {
-        const response = await fetch('/api/clients');
+        const response = await fetch(apiUrl('/api/clients'));
         if (!response.ok) throw new Error('Failed to fetch clients');
 
         const data = await response.json();
@@ -86,7 +87,7 @@ async function disconnectClient(clientId) {
     if (!confirm(`Disconnect ${clientId}?`)) return;
 
     try {
-        const response = await fetch('/api/clients/disconnect', {
+        const response = await fetch(apiUrl('/api/clients/disconnect'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ client_id: clientId })
