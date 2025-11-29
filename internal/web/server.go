@@ -33,9 +33,11 @@ var wsUpgrader = websocket.Upgrader{
 
 // wsClient represents a WebSocket client connection
 type wsClient struct {
-	conn   *websocket.Conn
-	send   chan []byte
-	server *Server
+	conn     *websocket.Conn
+	send     chan []byte
+	server   *Server
+	closed   bool
+	closedMu sync.Mutex
 }
 
 type Server struct {
@@ -515,6 +517,28 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	go client.readPump()
 }
 
+// close safely closes the client and cleans up resources
+func (c *wsClient) close() {
+	c.closedMu.Lock()
+	if c.closed {
+		c.closedMu.Unlock()
+		return
+	}
+	c.closed = true
+	c.closedMu.Unlock()
+
+	// Remove from server's client list
+	c.server.wsClientsMu.Lock()
+	delete(c.server.wsClients, c)
+	c.server.wsClientsMu.Unlock()
+
+	// Decrement web client count
+	c.server.proxy.RemoveWebClient()
+
+	// Close connection
+	c.conn.Close()
+}
+
 // writePump pumps messages from the send channel to the WebSocket connection
 func (c *wsClient) writePump() {
 	ticker := time.NewTicker(2 * time.Second) // Status update interval
@@ -522,11 +546,7 @@ func (c *wsClient) writePump() {
 	defer func() {
 		ticker.Stop()
 		pingTicker.Stop()
-		c.conn.Close()
-		c.server.wsClientsMu.Lock()
-		delete(c.server.wsClients, c)
-		c.server.wsClientsMu.Unlock()
-		c.server.proxy.RemoveWebClient()
+		c.close()
 	}()
 
 	for {
@@ -569,9 +589,7 @@ func (c *wsClient) writePump() {
 // readPump pumps messages from the WebSocket connection (handles pongs and close)
 func (c *wsClient) readPump() {
 	defer func() {
-		c.server.wsClientsMu.Lock()
-		delete(c.server.wsClients, c)
-		c.server.wsClientsMu.Unlock()
+		// Close connection - this will cause writePump to exit
 		c.conn.Close()
 	}()
 
@@ -603,15 +621,18 @@ func (s *Server) broadcastToWebSocket(msgType string, data interface{}) {
 	}
 
 	s.wsClientsMu.Lock()
-	defer s.wsClientsMu.Unlock()
-
+	clients := make([]*wsClient, 0, len(s.wsClients))
 	for client := range s.wsClients {
+		clients = append(clients, client)
+	}
+	s.wsClientsMu.Unlock()
+
+	for _, client := range clients {
 		select {
 		case client.send <- jsonData:
 		default:
 			// Client too slow, close connection
-			close(client.send)
-			delete(s.wsClients, client)
+			go client.close()
 		}
 	}
 }
