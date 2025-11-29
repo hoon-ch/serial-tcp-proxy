@@ -33,24 +33,28 @@ var wsUpgrader = websocket.Upgrader{
 
 // wsClient represents a WebSocket client connection
 type wsClient struct {
-	conn     *websocket.Conn
-	send     chan []byte
-	server   *Server
-	closed   bool
-	closedMu sync.Mutex
+	conn        *websocket.Conn
+	send        chan []byte
+	server      *Server
+	closed      bool
+	closedMu    sync.Mutex
+	id          string
+	addr        string
+	connectedAt time.Time
 }
 
 type Server struct {
-	config      *config.Config
-	proxy       *proxy.Server
-	logger      *logger.Logger
-	httpServer  *http.Server
-	clients     map[chan string]bool
-	clientsMu   sync.Mutex
-	wsClients   map[*wsClient]bool
-	wsClientsMu sync.Mutex
-	logBuffer   []string
-	logBufferMu sync.Mutex
+	config        *config.Config
+	proxy         *proxy.Server
+	logger        *logger.Logger
+	httpServer    *http.Server
+	clients       map[chan string]bool
+	clientsMu     sync.Mutex
+	wsClients     map[*wsClient]bool
+	wsClientsMu   sync.Mutex
+	wsClientCount uint64
+	logBuffer     []string
+	logBufferMu   sync.Mutex
 }
 
 func NewServer(cfg *config.Config, p *proxy.Server, l *logger.Logger) *Server {
@@ -483,10 +487,19 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Generate unique ID for web client
+	s.wsClientsMu.Lock()
+	s.wsClientCount++
+	clientID := fmt.Sprintf("web#%d", s.wsClientCount)
+	s.wsClientsMu.Unlock()
+
 	client := &wsClient{
-		conn:   conn,
-		send:   make(chan []byte, 256),
-		server: s,
+		conn:        conn,
+		send:        make(chan []byte, 256),
+		server:      s,
+		id:          clientID,
+		addr:        r.RemoteAddr,
+		connectedAt: time.Now(),
 	}
 
 	// Register client
@@ -700,7 +713,21 @@ func (s *Server) handleClients(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get TCP clients
 	clients := s.proxy.GetClients()
+
+	// Add web clients
+	s.wsClientsMu.Lock()
+	for client := range s.wsClients {
+		clients = append(clients, proxy.ClientInfo{
+			ID:          client.id,
+			Addr:        client.addr,
+			ConnectedAt: client.connectedAt.Format(time.RFC3339),
+			Type:        "web",
+		})
+	}
+	s.wsClientsMu.Unlock()
+
 	response := ClientsResponse{
 		Clients:    clients,
 		TCPCount:   s.proxy.GetTCPClientCount(),
@@ -736,10 +763,20 @@ func (s *Server) handleDisconnectClient(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	success := s.proxy.DisconnectClient(req.ClientID)
-	if !success {
-		http.Error(w, "Client not found", http.StatusNotFound)
-		return
+	// Check if it's a web client
+	if strings.HasPrefix(req.ClientID, "web#") {
+		success := s.disconnectWebClient(req.ClientID)
+		if !success {
+			http.Error(w, "Client not found", http.StatusNotFound)
+			return
+		}
+	} else {
+		// TCP client
+		success := s.proxy.DisconnectClient(req.ClientID)
+		if !success {
+			http.Error(w, "Client not found", http.StatusNotFound)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -747,4 +784,24 @@ func (s *Server) handleDisconnectClient(w http.ResponseWriter, r *http.Request) 
 	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
 		s.logger.Error("Failed to encode disconnect response: %v", err)
 	}
+}
+
+// disconnectWebClient disconnects a web client by ID
+func (s *Server) disconnectWebClient(id string) bool {
+	s.wsClientsMu.Lock()
+	var target *wsClient
+	for client := range s.wsClients {
+		if client.id == id {
+			target = client
+			break
+		}
+	}
+	s.wsClientsMu.Unlock()
+
+	if target == nil {
+		return false
+	}
+
+	target.close()
+	return true
 }
