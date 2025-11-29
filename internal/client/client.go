@@ -119,8 +119,17 @@ func (cm *Manager) AddWebClient() error {
 
 // RemoveWebClient decrements the web client counter
 func (cm *Manager) RemoveWebClient() {
-	cm.webClients.Add(-1)
-	cm.logger.Info("Web client disconnected (total: %d)", cm.TotalCount())
+	// Prevent negative count
+	for {
+		current := cm.webClients.Load()
+		if current <= 0 {
+			return
+		}
+		if cm.webClients.CompareAndSwap(current, current-1) {
+			cm.logger.Info("Web client disconnected (total: %d)", cm.TotalCount())
+			return
+		}
+	}
 }
 
 // WebClientCount returns the count of web clients

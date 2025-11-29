@@ -602,8 +602,8 @@ func (c *wsClient) writePump() {
 // readPump pumps messages from the WebSocket connection (handles pongs and close)
 func (c *wsClient) readPump() {
 	defer func() {
-		// Close connection - this will cause writePump to exit
-		c.conn.Close()
+		// Safely close client and cleanup resources
+		c.close()
 	}()
 
 	c.conn.SetReadLimit(512)
@@ -641,6 +641,14 @@ func (s *Server) broadcastToWebSocket(msgType string, data interface{}) {
 	s.wsClientsMu.Unlock()
 
 	for _, client := range clients {
+		// Check if client is already closed before sending
+		client.closedMu.Lock()
+		if client.closed {
+			client.closedMu.Unlock()
+			continue
+		}
+		client.closedMu.Unlock()
+
 		select {
 		case client.send <- jsonData:
 		default:

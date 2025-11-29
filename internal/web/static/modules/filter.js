@@ -201,15 +201,21 @@ export function findMatchPositions(packet, parsed) {
 
     // Regex match
     if (parsed.regex) {
-        const hexNoSpaces = hexLower.replace(/\s+/g, '');
-        let match;
-        const regex = new RegExp(parsed.regex.source, parsed.regex.flags.includes('g') ? parsed.regex.flags : parsed.regex.flags + 'g');
-        while ((match = regex.exec(hexNoSpaces)) !== null) {
-            const byteStart = Math.floor(match.index / 2);
-            const byteEnd = Math.ceil((match.index + match[0].length) / 2);
-            for (let i = byteStart; i < byteEnd; i++) {
-                if (!positions.includes(i)) positions.push(i);
+        try {
+            const hexNoSpaces = hexLower.replace(/\s+/g, '');
+            let match;
+            const regex = new RegExp(parsed.regex.source, parsed.regex.flags.includes('g') ? parsed.regex.flags : parsed.regex.flags + 'g');
+            while ((match = regex.exec(hexNoSpaces)) !== null) {
+                const byteStart = Math.floor(match.index / 2);
+                const byteEnd = Math.ceil((match.index + match[0].length) / 2);
+                for (let i = byteStart; i < byteEnd; i++) {
+                    if (!positions.includes(i)) positions.push(i);
+                }
+                // Prevent infinite loop on zero-length matches
+                if (match[0].length === 0) break;
             }
+        } catch (e) {
+            // Invalid regex, skip
         }
     }
 
