@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **Potential deadlock in packet logging** causing Recv-Q accumulation
+  - Moved callback invocation outside of mutex lock in LogPacket()
+  - Copy log buffer before sending to WebSocket to avoid holding lock
+  - Use non-blocking channel send for buffered logs
+- Client management modal not working via Home Assistant Ingress
+  - Use apiUrl() helper for /api/clients endpoints
+
+### Changed
+- Client management modal now sorted by connection time (oldest first)
+
 ## [1.2.0] - 2025-11-30
 
 ### Added
@@ -28,17 +41,10 @@ All notable changes to this project will be documented in this file.
 - WebSocket client cleanup race conditions causing system hangs
 - Long upstream addresses truncated in dashboard card
 - Mobile devices unable to scroll page content
-- **Potential deadlock in packet logging** causing Recv-Q accumulation
-  - Moved callback invocation outside of mutex lock in LogPacket()
-  - Copy log buffer before sending to WebSocket to avoid holding lock
-  - Use non-blocking channel send for buffered logs
-- Client management modal not working via Home Assistant Ingress
-  - Use apiUrl() helper for /api/clients endpoints
 
 ### Changed
 - Web UI clients now count toward maxClients limit
 - Responsive layout improvements for mobile devices
-- Client management modal now sorted by connection time (oldest first)
 
 ## [1.1.5] - 2025-11-28
 
