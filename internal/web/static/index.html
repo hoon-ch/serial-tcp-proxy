@@ -92,6 +92,7 @@
                             </div>
                             <button id="clear-packets" class="btn btn-secondary">Clear</button>
                             <button id="pause-packets" class="btn btn-secondary">Pause</button>
+                            <button id="autoscroll-toggle" class="btn btn-secondary active" title="Auto-scroll to latest packets">Auto-scroll</button>
                             <button id="diff-packets" class="btn btn-secondary" disabled>Diff (0/2)</button>
                             <button id="export-packets" class="btn btn-secondary">Export</button>
                         </div>
@@ -122,7 +123,12 @@
                         </div>
                     </div>
 
-                    <div class="packet-table-container">
+                    <div class="packet-table-container" id="packet-table-container">
+                        <!-- Go to Latest floating button -->
+                        <button id="go-to-latest" class="go-to-latest-btn" style="display: none;">
+                            <span class="arrow">↓</span>
+                            <span class="new-count" id="new-packet-count">0 new</span>
+                        </button>
                         <table class="packet-table">
                             <thead>
                                 <tr>

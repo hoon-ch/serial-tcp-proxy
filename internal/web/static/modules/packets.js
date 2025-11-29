@@ -8,8 +8,14 @@ const packetList = document.getElementById('packet-list');
 const filterInput = document.getElementById('packet-filter');
 const diffBtn = document.getElementById('diff-packets');
 const sortHeaders = document.querySelectorAll('.packet-table th.sortable');
+const container = document.getElementById('packet-table-container');
+const goToLatestBtn = document.getElementById('go-to-latest');
+const newPacketCount = document.getElementById('new-packet-count');
+const autoscrollToggle = document.getElementById('autoscroll-toggle');
 
 let currentSort = { field: null, direction: 'asc' };
+let autoScrollEnabled = true;
+let missedPackets = 0;
 
 export function addPacketEntry(logLine) {
     // Only process packet logs
@@ -104,17 +110,53 @@ function renderRow(packet) {
 
     applyColumnVisibility(row);
 
-    const container = packetList.parentElement.parentElement;
-    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
-
     packetList.appendChild(row);
 
     if (packetList.children.length > 500) {
         packetList.removeChild(packetList.firstChild);
     }
 
-    if (isAtBottom) {
+    // Auto-scroll if enabled
+    if (autoScrollEnabled) {
         container.scrollTop = container.scrollHeight;
+    } else {
+        // Track missed packets when not auto-scrolling
+        missedPackets++;
+        updateGoToLatestButton();
+    }
+}
+
+// Check if user is at bottom of scroll
+function isAtBottom() {
+    return container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+}
+
+// Update the Go to Latest button visibility and count
+function updateGoToLatestButton() {
+    if (missedPackets > 0 && !autoScrollEnabled) {
+        goToLatestBtn.style.display = 'flex';
+        newPacketCount.textContent = `${missedPackets} new`;
+    } else {
+        goToLatestBtn.style.display = 'none';
+    }
+}
+
+// Scroll to bottom and reset missed count
+function scrollToLatest() {
+    container.scrollTop = container.scrollHeight;
+    missedPackets = 0;
+    autoScrollEnabled = true;
+    autoscrollToggle.classList.add('active');
+    updateGoToLatestButton();
+}
+
+// Toggle auto-scroll
+function toggleAutoScroll() {
+    autoScrollEnabled = !autoScrollEnabled;
+    autoscrollToggle.classList.toggle('active', autoScrollEnabled);
+
+    if (autoScrollEnabled) {
+        scrollToLatest();
     }
 }
 
@@ -160,8 +202,8 @@ export function renderPackets() {
 
     updateColumnVisibility();
 
-    if (!filterText && !currentSort.field) {
-        const container = packetList.parentElement.parentElement;
+    // Auto-scroll to bottom if enabled and no filter/sort active
+    if (autoScrollEnabled && !filterText && !currentSort.field) {
         container.scrollTop = container.scrollHeight;
     }
 }
@@ -193,6 +235,8 @@ export function clearPackets() {
     packetList.innerHTML = '';
     diffBtn.innerText = `Diff (0/2)`;
     diffBtn.disabled = true;
+    missedPackets = 0;
+    updateGoToLatestButton();
 }
 
 export function updateColumnVisibility() {
@@ -254,6 +298,35 @@ export function initPackets() {
         const row = e.target.closest('tr');
         if (row && row.packet) {
             togglePacketSelection(row, row.packet);
+        }
+    });
+
+    // Auto-scroll toggle button
+    autoscrollToggle.addEventListener('click', toggleAutoScroll);
+
+    // Go to Latest button
+    goToLatestBtn.addEventListener('click', scrollToLatest);
+
+    // Detect manual scroll to disable auto-scroll
+    container.addEventListener('scroll', () => {
+        if (autoScrollEnabled && !isAtBottom()) {
+            // User scrolled up, disable auto-scroll
+            autoScrollEnabled = false;
+            autoscrollToggle.classList.remove('active');
+        } else if (!autoScrollEnabled && isAtBottom()) {
+            // User scrolled to bottom, re-enable auto-scroll
+            autoScrollEnabled = true;
+            autoscrollToggle.classList.add('active');
+            missedPackets = 0;
+            updateGoToLatestButton();
+        }
+    });
+
+    // Keyboard shortcut: End key to scroll to latest
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'End' && document.getElementById('tab-inspector').classList.contains('active')) {
+            e.preventDefault();
+            scrollToLatest();
         }
     });
 }
