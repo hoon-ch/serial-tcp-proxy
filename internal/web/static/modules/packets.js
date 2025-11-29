@@ -1,4 +1,4 @@
-import { formatTime } from './utils.js';
+import { formatTime, debounce } from './utils.js';
 import {
     filterState,
     parseFilter,
@@ -403,10 +403,9 @@ export function initPackets() {
         });
     });
 
-    // Filter Text Input Event Listener
-    filterInput.addEventListener('input', () => {
-        renderPackets();
-    });
+    // Filter Text Input Event Listener (debounced for performance)
+    const debouncedRender = debounce(() => renderPackets(), 150);
+    filterInput.addEventListener('input', debouncedRender);
 
     // Direction Filter Buttons
     directionBtns.forEach(btn => {
