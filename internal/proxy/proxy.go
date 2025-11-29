@@ -163,6 +163,8 @@ func (ps *Server) handleClient(cl *client.Client) {
 	defer ps.clients.Remove(cl.ID)
 
 	// Enable TCP keepalive to detect dead connections
+	// This replaces read deadline - connections stay open indefinitely
+	// but dead connections are detected via OS-level keepalive probes
 	if tcpConn, ok := cl.Conn.(*net.TCPConn); ok {
 		_ = tcpConn.SetKeepAlive(true)
 		_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
@@ -180,10 +182,8 @@ func (ps *Server) handleClient(cl *client.Client) {
 		default:
 		}
 
-		// Set read deadline - use longer timeout for idle connections
-		// This allows clients that only receive data (not send) to stay connected
-		_ = cl.Conn.SetReadDeadline(time.Now().Add(30 * time.Minute))
-
+		// No read deadline - client connections stay open indefinitely
+		// TCP keepalive will detect and close dead connections
 		n, err := cl.Conn.Read(buf)
 		if err != nil {
 			return
