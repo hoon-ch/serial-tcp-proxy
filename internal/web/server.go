@@ -515,15 +515,23 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Send buffered logs
+	// Send buffered logs (copy buffer to avoid holding lock during channel sends)
 	s.logBufferMu.Lock()
-	for _, logMsg := range s.logBuffer {
+	bufferedLogs := make([]string, len(s.logBuffer))
+	copy(bufferedLogs, s.logBuffer)
+	s.logBufferMu.Unlock()
+
+	for _, logMsg := range bufferedLogs {
 		msg := wsMessage{Type: "log", Data: logMsg}
 		if data, err := json.Marshal(msg); err == nil {
-			client.send <- data
+			select {
+			case client.send <- data:
+			default:
+				// Channel full, skip remaining buffered logs
+				break
+			}
 		}
 	}
-	s.logBufferMu.Unlock()
 
 	// Start goroutines for reading and writing
 	go client.writePump()

@@ -142,8 +142,9 @@ func (l *Logger) LogPacket(direction string, data []byte, source string) {
 			timestamp, LogPkt, direction, formattedHex, len(data))
 	}
 
+	// Get callback reference while holding lock
 	l.mu.Lock()
-	defer l.mu.Unlock()
+	callback := l.logCallback
 
 	// Only write to stdout/file if enabled
 	if l.logPackets {
@@ -153,10 +154,11 @@ func (l *Logger) LogPacket(direction string, data []byte, source string) {
 			_, _ = l.fileWriter.WriteString(line)
 		}
 	}
+	l.mu.Unlock()
 
-	// Always send to callback if exists
-	if l.logCallback != nil {
-		l.logCallback(line)
+	// Call callback outside of lock to prevent deadlock
+	if callback != nil {
+		callback(line)
 	}
 }
 
