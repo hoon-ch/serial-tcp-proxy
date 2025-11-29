@@ -50,7 +50,10 @@ jobs:
       - name: Update CHANGELOG.md
         run: |
           DATE=$(date +%Y-%m-%d)
-          sed -i "s/## \[Unreleased\]/## [${{ steps.version.outputs.VERSION }}] - $DATE/" CHANGELOG.md
+          # Only update if [Unreleased] section exists and has content
+          if grep -q "## \[Unreleased\]" CHANGELOG.md; then
+            sed -i "s/## \[Unreleased\]/## [${{ steps.version.outputs.VERSION }}] - $DATE/" CHANGELOG.md
+          fi
 
       - name: Commit version updates
         run: |

@@ -195,7 +195,7 @@ Before creating a release:
 
 ### Updating CHANGELOG
 
-When making changes, add entries under `[Unreleased]` in `CHANGELOG.md`:
+When making changes, add an `[Unreleased]` section at the top of `CHANGELOG.md`:
 
 ```markdown
 ## [Unreleased]
@@ -208,9 +208,12 @@ When making changes, add entries under `[Unreleased]` in `CHANGELOG.md`:
 
 ### Changed
 - Change description
+
+## [1.2.0] - 2025-11-30
+...
 ```
 
-The release workflow will automatically convert `[Unreleased]` to the version number with the release date.
+**Important**: Only add `[Unreleased]` when you have actual changes to document. The release workflow will convert it to the version number with the release date. If there's no `[Unreleased]` section, the workflow will skip CHANGELOG updates.
 
 ### Workflow Behavior
 
