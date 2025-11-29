@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Packet Inspector Enhancements**
+  - Auto-scroll toggle button to follow latest packets
+  - "Go to Latest" floating button with new packet count
+  - Advanced filter syntax: `dir:up/down`, `len:>10`, `hex:f7 0e`, `ascii:hello`, `/regex/`
+  - Filter presets with save/load to localStorage
+  - Highlight mode to show all packets but highlight matches
+  - Direction filter quick buttons (All / UP -> / -> UP)
+- **Client Management Modal**
+  - Click "Clients" card to open management modal
+  - View all connected clients (TCP and Web)
+  - Disconnect individual clients from the modal
+  - Real-time client list refresh every 2 seconds
+- **Performance**
+  - Virtual scrolling for packet table (supports 10,000+ packets)
+  - DOM element pooling for efficient rendering
+
+### Fixed
+- Client disconnection after 60 seconds due to read deadline
+  - Now uses TCP keepalive (30s interval) instead of read deadline
+  - Connections stay open indefinitely for idle clients (e.g., overnight)
+- WebSocket client cleanup race conditions causing system hangs
+- Long upstream addresses truncated in dashboard card
+- Mobile devices unable to scroll page content
+
+### Changed
+- Web UI clients now count toward maxClients limit
+- Responsive layout improvements for mobile devices
+
 ## [1.1.5] - 2025-11-28
 
 ### Added
