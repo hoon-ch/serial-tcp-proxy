@@ -838,3 +838,221 @@ body {
 .packet-table-container {
     position: relative;
 }
+
+/* Filter Bar */
+.filter-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--diff-bg);
+    border-bottom: 1px solid var(--border-color);
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* Direction Filter Button Group */
+.btn-group {
+    display: flex;
+    border-radius: 0.375rem;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.btn-filter {
+    padding: 0.375rem 0.75rem;
+    background: var(--card-bg);
+    border: none;
+    border-right: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-filter:last-child {
+    border-right: none;
+}
+
+.btn-filter:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+}
+
+.btn-filter.active {
+    background: var(--accent-color);
+    color: white;
+}
+
+/* Filter Input Wrapper */
+.filter-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.filter-input-wrapper .filter-input {
+    width: 320px;
+    padding-right: 2rem;
+}
+
+.filter-help-btn {
+    position: absolute;
+    right: 0.5rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    background: var(--hover-bg);
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.filter-help-btn:hover {
+    background: var(--accent-color);
+    color: white;
+}
+
+/* Filter Presets */
+.filter-presets {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.filter-presets select {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.filter-presets select:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+/* Highlight Toggle */
+#highlight-toggle.active {
+    background: #f59e0b;
+    color: white;
+    border-color: #f59e0b;
+}
+
+/* Filter Help Modal */
+.modal-small {
+    max-width: 600px;
+}
+
+.filter-help-content {
+    padding: 1rem;
+}
+
+.help-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.help-table th,
+.help-table td {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.help-table th {
+    background: var(--table-header-bg);
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.help-table code {
+    background: var(--code-block-bg);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+}
+
+.help-note {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: var(--active-bg);
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* Save Preset Modal */
+.save-preset-content {
+    padding: 1rem;
+}
+
+.save-preset-content .form-group {
+    margin-bottom: 1rem;
+}
+
+.save-preset-content label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.save-preset-content input {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+}
+
+.save-preset-content input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.save-preset-content input[readonly] {
+    background: var(--hover-bg);
+    color: var(--text-secondary);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+/* Highlight Mode Styles */
+.packet-table tr.highlight-match {
+    background: rgba(245, 158, 11, 0.15) !important;
+}
+
+.packet-table tr.highlight-match td {
+    position: relative;
+}
+
+.packet-table .hex .highlight-byte {
+    background: rgba(245, 158, 11, 0.4);
+    border-radius: 2px;
+    padding: 0 2px;
+}
+
+.packet-table tr.highlight-no-match {
+    opacity: 0.4;
+}

@@ -1,4 +1,12 @@
 import { formatTime } from './utils.js';
+import {
+    filterState,
+    parseFilter,
+    matchesFilter,
+    findMatchPositions,
+    loadPresets,
+    addPreset
+} from './filter.js';
 
 export const packets = [];
 export const selectedPackets = [];
@@ -12,6 +20,21 @@ const container = document.getElementById('packet-table-container');
 const goToLatestBtn = document.getElementById('go-to-latest');
 const newPacketCount = document.getElementById('new-packet-count');
 const autoscrollToggle = document.getElementById('autoscroll-toggle');
+
+// Filter elements
+const directionBtns = document.querySelectorAll('.direction-filter .btn-filter');
+const highlightToggle = document.getElementById('highlight-toggle');
+const filterPresetSelect = document.getElementById('filter-preset-select');
+const savePresetBtn = document.getElementById('save-preset');
+const filterHelpBtn = document.getElementById('filter-help');
+const filterHelpModal = document.getElementById('filter-help-modal');
+const closeFilterHelpBtn = document.getElementById('close-filter-help');
+const savePresetModal = document.getElementById('save-preset-modal');
+const closeSavePresetBtn = document.getElementById('close-save-preset');
+const presetNameInput = document.getElementById('preset-name-input');
+const presetFilterPreview = document.getElementById('preset-filter-preview');
+const confirmSavePresetBtn = document.getElementById('confirm-save-preset');
+const customPresetsGroup = document.getElementById('custom-presets');
 
 let currentSort = { field: null, direction: 'asc' };
 let autoScrollEnabled = true;
@@ -163,17 +186,30 @@ function toggleAutoScroll() {
 export function renderPackets() {
     packetList.innerHTML = '';
 
-    const filterText = filterInput.value.toLowerCase();
-    let filtered = packets.filter(p => {
-        if (!filterText) return true;
-        return p.hexRaw.toLowerCase().includes(filterText) ||
-            p.ascii.toLowerCase().includes(filterText);
+    // Update filter state
+    filterState.text = filterInput.value;
+    filterState.parsed = parseFilter(filterInput.value);
+
+    const hasActiveFilter = filterState.direction !== 'all' || filterState.text.trim();
+
+    // Filter or process all packets
+    let processedPackets = packets.map(p => {
+        const matches = matchesFilter(p, filterState.direction, filterState.parsed);
+        const matchPositions = matches && filterState.highlightMode ? findMatchPositions(p, filterState.parsed) : null;
+        return { packet: p, matches, matchPositions };
     });
 
+    // In normal mode, filter out non-matching packets
+    // In highlight mode, show all but mark matches
+    if (!filterState.highlightMode && hasActiveFilter) {
+        processedPackets = processedPackets.filter(item => item.matches);
+    }
+
+    // Apply sorting
     if (currentSort.field) {
-        filtered.sort((a, b) => {
-            let valA = a[currentSort.field];
-            let valB = b[currentSort.field];
+        processedPackets.sort((a, b) => {
+            let valA = a.packet[currentSort.field];
+            let valB = b.packet[currentSort.field];
             if (currentSort.field === 'length') {
                 valA = parseInt(valA);
                 valB = parseInt(valB);
@@ -184,17 +220,35 @@ export function renderPackets() {
         });
     }
 
-    filtered.forEach(p => {
+    // Render rows
+    processedPackets.forEach(({ packet: p, matches, matchPositions }) => {
         const row = document.createElement('tr');
         row.packet = p;
+
         if (selectedPackets.includes(p)) {
             row.classList.add('selected');
         }
+
+        // Apply highlight mode classes
+        if (filterState.highlightMode && hasActiveFilter) {
+            if (matches) {
+                row.classList.add('highlight-match');
+            } else {
+                row.classList.add('highlight-no-match');
+            }
+        }
+
+        // Generate hex HTML with optional highlighting
+        let hexHtml = p.hexFormatted;
+        if (matchPositions && matchPositions.length > 0) {
+            hexHtml = generateHighlightedHex(p.hexRaw, matchPositions);
+        }
+
         row.innerHTML = `
             <td>${p.time}</td>
             <td class="direction ${p.direction.includes('UP ->') ? 'up' : 'down'}">${p.direction}</td>
             <td>${p.length}</td>
-            <td class="hex">${p.hexFormatted}</td>
+            <td class="hex">${hexHtml}</td>
             <td class="ascii">${p.ascii}</td>
         `;
         packetList.appendChild(row);
@@ -203,9 +257,38 @@ export function renderPackets() {
     updateColumnVisibility();
 
     // Auto-scroll to bottom if enabled and no filter/sort active
-    if (autoScrollEnabled && !filterText && !currentSort.field) {
+    if (autoScrollEnabled && !hasActiveFilter && !currentSort.field) {
         container.scrollTop = container.scrollHeight;
     }
+}
+
+// Generate hex HTML with highlighted bytes
+function generateHighlightedHex(hexRaw, matchPositions) {
+    const hexBytes = hexRaw.split(' ');
+    let formattedHex = '';
+
+    for (let i = 0; i < hexBytes.length; i += 8) {
+        const group = hexBytes.slice(i, i + 8);
+        let groupHtml = '<span class="hex-group">';
+        groupHtml += group.map((byte, j) => {
+            const byteIndex = i + j;
+            const isHighlighted = matchPositions.includes(byteIndex);
+            const highlightClass = isHighlighted ? ' highlight-byte' : '';
+
+            if (byte === '00') {
+                return `<span class="hex-null${highlightClass}">00</span>`;
+            }
+            const code = parseInt(byte, 16);
+            if (code >= 32 && code <= 126) {
+                return `<span class="hex-printable${highlightClass}">${byte}</span>`;
+            }
+            return `<span class="hex-control${highlightClass}">${byte}</span>`;
+        }).join(' ');
+        groupHtml += '</span> ';
+        formattedHex += groupHtml;
+    }
+
+    return formattedHex;
 }
 
 export function togglePacketSelection(row, packet) {
@@ -258,7 +341,23 @@ function applyColumnVisibility(row) {
     });
 }
 
+// Load and render custom presets
+function loadCustomPresets() {
+    const presets = loadPresets();
+    customPresetsGroup.innerHTML = '';
+    presets.forEach(preset => {
+        const option = document.createElement('option');
+        option.value = preset.filter;
+        option.textContent = preset.name;
+        option.dataset.custom = 'true';
+        customPresetsGroup.appendChild(option);
+    });
+}
+
 export function initPackets() {
+    // Load custom presets on init
+    loadCustomPresets();
+
     // Sorting Event Listeners
     sortHeaders.forEach(header => {
         header.addEventListener('click', () => {
@@ -275,9 +374,86 @@ export function initPackets() {
         });
     });
 
-    // Filter Event Listener
+    // Filter Text Input Event Listener
     filterInput.addEventListener('input', () => {
         renderPackets();
+    });
+
+    // Direction Filter Buttons
+    directionBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            directionBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            filterState.direction = btn.dataset.dir;
+            renderPackets();
+        });
+    });
+
+    // Highlight Mode Toggle
+    highlightToggle.addEventListener('click', () => {
+        filterState.highlightMode = !filterState.highlightMode;
+        highlightToggle.classList.toggle('active', filterState.highlightMode);
+        renderPackets();
+    });
+
+    // Filter Presets Select
+    filterPresetSelect.addEventListener('change', (e) => {
+        if (e.target.value) {
+            filterInput.value = e.target.value;
+            renderPackets();
+        }
+        // Reset select to placeholder
+        e.target.selectedIndex = 0;
+    });
+
+    // Save Preset Button - Open Modal
+    savePresetBtn.addEventListener('click', () => {
+        const currentFilter = filterInput.value.trim();
+        if (!currentFilter) {
+            alert('Enter a filter first');
+            return;
+        }
+        presetFilterPreview.value = currentFilter;
+        presetNameInput.value = '';
+        savePresetModal.style.display = 'flex';
+        presetNameInput.focus();
+    });
+
+    // Close Save Preset Modal
+    closeSavePresetBtn.addEventListener('click', () => {
+        savePresetModal.style.display = 'none';
+    });
+
+    // Confirm Save Preset
+    confirmSavePresetBtn.addEventListener('click', () => {
+        const name = presetNameInput.value.trim();
+        const filter = presetFilterPreview.value;
+        if (!name) {
+            alert('Enter a preset name');
+            return;
+        }
+        addPreset(name, filter);
+        loadCustomPresets();
+        savePresetModal.style.display = 'none';
+    });
+
+    // Filter Help Button
+    filterHelpBtn.addEventListener('click', () => {
+        filterHelpModal.style.display = 'flex';
+    });
+
+    // Close Filter Help Modal
+    closeFilterHelpBtn.addEventListener('click', () => {
+        filterHelpModal.style.display = 'none';
+    });
+
+    // Close modals on outside click
+    [filterHelpModal, savePresetModal].forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
     });
 
     // Column Toggle Event Listeners

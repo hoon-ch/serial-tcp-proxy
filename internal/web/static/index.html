@@ -81,20 +81,105 @@
                         <h2>Packet Inspector</h2>
                         <div class="actions">
                             <button id="toggle-inject" class="btn btn-secondary">Inject Packet</button>
-                            <input type="text" id="packet-filter" class="filter-input"
-                                placeholder="Filter packets (Hex/ASCII)...">
-                            <div class="column-toggles">
-                                <label><input type="checkbox" checked data-col="time"> Time</label>
-                                <label><input type="checkbox" checked data-col="dir"> Dir</label>
-                                <label><input type="checkbox" checked data-col="len"> Len</label>
-                                <label><input type="checkbox" checked data-col="hex"> Hex</label>
-                                <label><input type="checkbox" checked data-col="ascii"> ASCII</label>
-                            </div>
                             <button id="clear-packets" class="btn btn-secondary">Clear</button>
                             <button id="pause-packets" class="btn btn-secondary">Pause</button>
                             <button id="autoscroll-toggle" class="btn btn-secondary active" title="Auto-scroll to latest packets">Auto-scroll</button>
                             <button id="diff-packets" class="btn btn-secondary" disabled>Diff (0/2)</button>
                             <button id="export-packets" class="btn btn-secondary">Export</button>
+                        </div>
+                    </div>
+
+                    <!-- Filter Bar -->
+                    <div class="filter-bar">
+                        <div class="filter-group">
+                            <!-- Direction Filter -->
+                            <div class="direction-filter btn-group">
+                                <button class="btn btn-filter active" data-dir="all">All</button>
+                                <button class="btn btn-filter" data-dir="up">UP -></button>
+                                <button class="btn btn-filter" data-dir="down">-> UP</button>
+                            </div>
+
+                            <!-- Filter Input -->
+                            <div class="filter-input-wrapper">
+                                <input type="text" id="packet-filter" class="filter-input"
+                                    placeholder="Filter: hex:f7 0e, len:>10, ascii:hello, /regex/">
+                                <button id="filter-help" class="btn-icon filter-help-btn" title="Filter syntax help">?</button>
+                            </div>
+
+                            <!-- Filter Presets -->
+                            <div class="filter-presets">
+                                <select id="filter-preset-select">
+                                    <option value="">Presets...</option>
+                                    <optgroup label="Default">
+                                        <option value="len:>50">Large Packets (>50)</option>
+                                        <option value="len:<=10">Small Packets (<=10)</option>
+                                        <option value="dir:up">Upstream Only</option>
+                                        <option value="dir:down">Downstream Only</option>
+                                    </optgroup>
+                                    <optgroup label="Custom" id="custom-presets">
+                                    </optgroup>
+                                </select>
+                                <button id="save-preset" class="btn btn-secondary" title="Save current filter as preset">Save</button>
+                            </div>
+
+                            <!-- Highlight Mode Toggle -->
+                            <button id="highlight-toggle" class="btn btn-secondary" title="Highlight matching instead of filtering">Highlight</button>
+                        </div>
+
+                        <div class="column-toggles">
+                            <label><input type="checkbox" checked data-col="time"> Time</label>
+                            <label><input type="checkbox" checked data-col="dir"> Dir</label>
+                            <label><input type="checkbox" checked data-col="len"> Len</label>
+                            <label><input type="checkbox" checked data-col="hex"> Hex</label>
+                            <label><input type="checkbox" checked data-col="ascii"> ASCII</label>
+                        </div>
+                    </div>
+
+                    <!-- Filter Help Modal -->
+                    <div id="filter-help-modal" class="modal" style="display: none;">
+                        <div class="modal-content modal-small">
+                            <div class="modal-header">
+                                <h3>Filter Syntax Help</h3>
+                                <button id="close-filter-help" class="btn-icon">×</button>
+                            </div>
+                            <div class="filter-help-content">
+                                <table class="help-table">
+                                    <tr><th>Syntax</th><th>Example</th><th>Description</th></tr>
+                                    <tr><td><code>dir:up</code></td><td><code>dir:up</code></td><td>Upstream only</td></tr>
+                                    <tr><td><code>dir:down</code></td><td><code>dir:down</code></td><td>Downstream only</td></tr>
+                                    <tr><td><code>len:N</code></td><td><code>len:10</code></td><td>Exactly N bytes</td></tr>
+                                    <tr><td><code>len:>N</code></td><td><code>len:>10</code></td><td>More than N bytes</td></tr>
+                                    <tr><td><code>len:<N</code></td><td><code>len:<10</code></td><td>Less than N bytes</td></tr>
+                                    <tr><td><code>len:N-M</code></td><td><code>len:5-20</code></td><td>Between N and M bytes</td></tr>
+                                    <tr><td><code>hex:XX</code></td><td><code>hex:f7 0e</code></td><td>Contains hex pattern</td></tr>
+                                    <tr><td><code>ascii:text</code></td><td><code>ascii:hello</code></td><td>Contains ASCII text</td></tr>
+                                    <tr><td><code>/regex/</code></td><td><code>/f7.{2}0e/</code></td><td>Regex match on hex</td></tr>
+                                </table>
+                                <p class="help-note">Combine filters with spaces: <code>dir:up len:>10 hex:f7</code></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Save Preset Modal -->
+                    <div id="save-preset-modal" class="modal" style="display: none;">
+                        <div class="modal-content modal-small">
+                            <div class="modal-header">
+                                <h3>Save Filter Preset</h3>
+                                <button id="close-save-preset" class="btn-icon">×</button>
+                            </div>
+                            <div class="save-preset-content">
+                                <div class="form-group">
+                                    <label>Preset Name</label>
+                                    <input type="text" id="preset-name-input" placeholder="My Filter">
+                                </div>
+                                <div class="form-group">
+                                    <label>Filter</label>
+                                    <input type="text" id="preset-filter-preview" readonly>
+                                </div>
+                                <div class="modal-actions">
+                                    <button id="confirm-save-preset" class="btn btn-primary">Save</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
