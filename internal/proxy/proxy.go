@@ -280,6 +280,41 @@ func (ps *Server) IsListening() bool {
 // ErrInvalidTarget is returned when an invalid target is specified for packet injection
 var ErrInvalidTarget = fmt.Errorf("invalid target: must be 'upstream' or 'downstream'")
 
+// ClientInfo represents information about a connected client
+type ClientInfo struct {
+	ID          string `json:"id"`
+	Addr        string `json:"addr"`
+	ConnectedAt string `json:"connected_at"`
+	Type        string `json:"type"` // "tcp" or "web"
+}
+
+// GetClients returns information about all connected clients
+func (ps *Server) GetClients() []ClientInfo {
+	tcpClients := ps.clients.GetAll()
+	result := make([]ClientInfo, 0, len(tcpClients))
+
+	for _, c := range tcpClients {
+		result = append(result, ClientInfo{
+			ID:          c.ID,
+			Addr:        c.Addr,
+			ConnectedAt: c.ConnectedAt.Format("2006-01-02T15:04:05Z07:00"),
+			Type:        "tcp",
+		})
+	}
+
+	return result
+}
+
+// DisconnectClient disconnects a client by ID
+func (ps *Server) DisconnectClient(id string) bool {
+	client := ps.clients.Get(id)
+	if client == nil {
+		return false
+	}
+	ps.clients.Remove(id)
+	return true
+}
+
 // InjectPacket injects a packet to the specified target (upstream or downstream)
 func (ps *Server) InjectPacket(target string, data []byte) error {
 	if target == "upstream" {

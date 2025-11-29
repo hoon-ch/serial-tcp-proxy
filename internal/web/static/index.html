@@ -43,7 +43,7 @@
                     <div class="value" id="listen-port">-</div>
                     <div class="label">TCP Port</div>
                 </div>
-                <div class="card stat-card">
+                <div class="card stat-card stat-card-clickable" id="clients-card" title="Click to manage clients">
                     <h3>Clients</h3>
                     <div class="value" id="client-count">0</div>
                     <div class="label">Connected</div>
@@ -299,6 +299,55 @@
             </div>
         </main>
     </div>
+    <!-- Clients Modal -->
+    <div id="clients-modal" class="modal" style="display: none;">
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h3>Connected Clients</h3>
+                <button id="close-clients-modal" class="btn-icon">×</button>
+            </div>
+            <div class="clients-modal-content">
+                <div class="clients-summary">
+                    <div class="summary-item">
+                        <span class="summary-label">TCP Clients</span>
+                        <span class="summary-value" id="modal-tcp-count">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Web Clients</span>
+                        <span class="summary-value" id="modal-web-count">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total</span>
+                        <span class="summary-value" id="modal-total-count">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Max</span>
+                        <span class="summary-value" id="modal-max-clients">0</span>
+                    </div>
+                </div>
+                <div class="clients-table-container">
+                    <table class="clients-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Address</th>
+                                <th>Type</th>
+                                <th>Connected At</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clients-list">
+                            <!-- Client rows will be inserted here -->
+                        </tbody>
+                    </table>
+                    <div id="no-clients-message" class="no-clients" style="display: none;">
+                        No TCP clients connected
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="app.js"></script>
 </body>
 

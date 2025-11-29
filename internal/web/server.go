@@ -127,6 +127,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/events", s.authMiddleware(s.handleEvents)) // Legacy SSE endpoint
 	mux.HandleFunc("/api/ws", s.authMiddleware(s.handleWebSocket))  // WebSocket endpoint
 	mux.HandleFunc("/api/inject", s.authMiddleware(s.handleInject))
+	mux.HandleFunc("/api/clients", s.authMiddleware(s.handleClients))
+	mux.HandleFunc("/api/clients/disconnect", s.authMiddleware(s.handleDisconnectClient))
 
 	// Static files (protected)
 	staticRoot, err := fs.Sub(staticFS, "static")
@@ -659,5 +661,69 @@ func (s *Server) handleInject(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
 		s.logger.Error("Failed to encode inject response: %v", err)
+	}
+}
+
+// ClientsResponse represents the response for the clients endpoint
+type ClientsResponse struct {
+	Clients    []proxy.ClientInfo `json:"clients"`
+	TCPCount   int                `json:"tcp_count"`
+	WebCount   int                `json:"web_count"`
+	TotalCount int                `json:"total_count"`
+	MaxClients int                `json:"max_clients"`
+}
+
+func (s *Server) handleClients(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	clients := s.proxy.GetClients()
+	response := ClientsResponse{
+		Clients:    clients,
+		TCPCount:   s.proxy.GetTCPClientCount(),
+		WebCount:   s.proxy.GetWebClientCount(),
+		TotalCount: s.proxy.GetClientCount(),
+		MaxClients: s.proxy.GetMaxClients(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Error("Failed to encode clients response: %v", err)
+	}
+}
+
+type DisconnectRequest struct {
+	ClientID string `json:"client_id"`
+}
+
+func (s *Server) handleDisconnectClient(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req DisconnectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.ClientID == "" {
+		http.Error(w, "client_id is required", http.StatusBadRequest)
+		return
+	}
+
+	success := s.proxy.DisconnectClient(req.ClientID)
+	if !success {
+		http.Error(w, "Client not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
+		s.logger.Error("Failed to encode disconnect response: %v", err)
 	}
 }

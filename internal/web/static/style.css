@@ -1071,3 +1071,150 @@ body {
 .packet-table tbody {
     position: relative;
 }
+
+/* Clickable Stat Card */
+.stat-card-clickable {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.stat-card-clickable:hover {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.stat-card-clickable:active {
+    transform: scale(0.98);
+}
+
+/* Modal Medium Size */
+.modal-medium {
+    max-width: 700px;
+}
+
+/* Clients Modal */
+.clients-modal-content {
+    padding: 1rem;
+}
+
+.clients-summary {
+    display: flex;
+    gap: 1.5rem;
+    padding: 1rem;
+    background: var(--diff-bg);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.summary-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.summary-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.clients-table-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+}
+
+.clients-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.clients-table th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    background: var(--table-header-bg);
+    color: var(--text-secondary);
+    font-weight: 500;
+    position: sticky;
+    top: 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.clients-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.clients-table tr:hover {
+    background: var(--hover-bg);
+}
+
+.clients-table .client-id {
+    font-family: var(--font-mono);
+    color: var(--accent-color);
+}
+
+.clients-table .client-addr {
+    font-family: var(--font-mono);
+}
+
+.clients-table .client-type {
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    display: inline-block;
+}
+
+.clients-table .client-type.tcp {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success-color);
+}
+
+.clients-table .client-type.web {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent-color);
+}
+
+.clients-table .client-time {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+}
+
+.btn-disconnect {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    background: var(--error-color);
+    color: white;
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-disconnect:hover {
+    background: #dc2626;
+}
+
+.btn-disconnect:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.no-clients {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
