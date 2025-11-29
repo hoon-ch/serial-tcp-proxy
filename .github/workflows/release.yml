@@ -1,9 +1,8 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -14,11 +13,61 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get version from release tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Releasing version: $VERSION"
+
+      - name: Update version in config.yaml
+        run: |
+          sed -i "s/^version: .*/version: \"${{ steps.version.outputs.VERSION }}\"/" config.yaml
+
+      - name: Update version in README.md
+        run: |
+          sed -i "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"${{ steps.version.outputs.VERSION }}\"/" README.md
+
+      - name: Update version in docs/API.md
+        run: |
+          sed -i "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"${{ steps.version.outputs.VERSION }}\"/" docs/API.md
+
+      - name: Update version in docs/README_ko.md
+        run: |
+          sed -i "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"${{ steps.version.outputs.VERSION }}\"/" docs/README_ko.md
+
+      - name: Update CHANGELOG.md
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          sed -i "s/## \[Unreleased\]/## [${{ steps.version.outputs.VERSION }}] - $DATE/" CHANGELOG.md
+
+      - name: Commit version updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "chore: bump version to ${{ steps.version.outputs.VERSION }}"
+          git push origin main
+
   test:
+    needs: update-version
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -29,7 +78,7 @@ jobs:
         run: go test -v ./...
 
   build-binaries:
-    needs: test
+    needs: [update-version, test]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -57,15 +106,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-
-      - name: Get version
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Build binary
         env:
@@ -74,7 +121,7 @@ jobs:
           GOARM: ${{ matrix.goarm }}
           CGO_ENABLED: 0
         run: |
-          go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" \
+          go build -ldflags="-s -w -X main.Version=v${{ needs.update-version.outputs.version }}" \
             -o serial-tcp-proxy-${{ matrix.suffix }} \
             ./cmd/serial-tcp-proxy
 
@@ -85,7 +132,7 @@ jobs:
           path: serial-tcp-proxy-${{ matrix.suffix }}
 
   build-docker:
-    needs: test
+    needs: [update-version, test]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -101,6 +148,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -115,12 +164,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get version
-        id: version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -128,20 +171,17 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ${{ env.REGISTRY }}/hoon-ch/${{ matrix.arch }}-serial-tcp-proxy:${{ steps.version.outputs.VERSION }}
+            ${{ env.REGISTRY }}/hoon-ch/${{ matrix.arch }}-serial-tcp-proxy:${{ needs.update-version.outputs.version }}
             ${{ env.REGISTRY }}/hoon-ch/${{ matrix.arch }}-serial-tcp-proxy:latest
           build-args: |
-            VERSION=${{ steps.version.outputs.VERSION }}
+            VERSION=${{ needs.update-version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  create-release:
-    needs: [build-binaries, build-docker]
+  upload-release-assets:
+    needs: [update-version, build-binaries, build-docker]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -154,10 +194,9 @@ jobs:
           cd artifacts
           sha256sum serial-tcp-proxy-* > checksums.txt
 
-      - name: Create Release
+      - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         with:
-          generate_release_notes: true
           files: |
             artifacts/serial-tcp-proxy-*
             artifacts/checksums.txt

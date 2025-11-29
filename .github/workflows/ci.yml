@@ -3,6 +3,11 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'CHANGELOG.md'
+      - 'config.yaml'
+      - 'README.md'
+      - 'docs/**'
   pull_request:
     branches: [main]
 
