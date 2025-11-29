@@ -7,6 +7,7 @@ import {
     loadPresets,
     addPreset
 } from './filter.js';
+import { VirtualTable } from './virtual-table.js';
 
 export const packets = [];
 export const selectedPackets = [];
@@ -39,6 +40,15 @@ const customPresetsGroup = document.getElementById('custom-presets');
 let currentSort = { field: null, direction: 'asc' };
 let autoScrollEnabled = true;
 let missedPackets = 0;
+
+// Virtual table instance
+let virtualTable = null;
+
+// Processed packets cache for virtual table
+let processedPackets = [];
+
+// Maximum packets to store (increased from 1000 due to virtual scrolling)
+const MAX_PACKETS = 10000;
 
 export function addPacketEntry(logLine) {
     // Only process packet logs
@@ -106,44 +116,39 @@ export function addPacketEntry(logLine) {
     };
 
     packets.push(packet);
-    if (packets.length > 1000) packets.shift();
+    if (packets.length > MAX_PACKETS) packets.shift();
 
-    if (!filterInput.value && !currentSort.field) {
-        renderRow(packet);
+    // Update display
+    if (!filterInput.value && !currentSort.field && filterState.direction === 'all') {
+        // Fast path: just append and scroll
+        appendPacket(packet);
     } else {
+        // Full re-render needed for filtering/sorting
         renderPackets();
     }
 }
 
-function renderRow(packet) {
-    const row = document.createElement('tr');
-    row.packet = packet;
+// Fast append for unfiltered view
+function appendPacket(packet) {
+    // Process the new packet
+    const matches = matchesFilter(packet, filterState.direction, filterState.parsed);
+    const matchPositions = matches && filterState.highlightMode ? findMatchPositions(packet, filterState.parsed) : null;
+    const item = { packet, matches, matchPositions };
 
-    if (selectedPackets.includes(packet)) {
-        row.classList.add('selected');
+    processedPackets.push(item);
+
+    // Trim if over limit
+    if (processedPackets.length > MAX_PACKETS) {
+        processedPackets.shift();
     }
 
-    row.innerHTML = `
-        <td>${packet.time}</td>
-        <td class="direction ${packet.direction.includes('UP ->') ? 'up' : 'down'}">${packet.direction}</td>
-        <td>${packet.length}</td>
-        <td class="hex">${packet.hexFormatted}</td>
-        <td class="ascii">${packet.ascii}</td>
-    `;
-
-    applyColumnVisibility(row);
-
-    packetList.appendChild(row);
-
-    if (packetList.children.length > 500) {
-        packetList.removeChild(packetList.firstChild);
-    }
+    // Update virtual table
+    virtualTable.setData(processedPackets);
 
     // Auto-scroll if enabled
     if (autoScrollEnabled) {
-        container.scrollTop = container.scrollHeight;
+        virtualTable.scrollToEnd();
     } else {
-        // Track missed packets when not auto-scrolling
         missedPackets++;
         updateGoToLatestButton();
     }
@@ -151,7 +156,7 @@ function renderRow(packet) {
 
 // Check if user is at bottom of scroll
 function isAtBottom() {
-    return container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+    return virtualTable ? virtualTable.isAtBottom() : true;
 }
 
 // Update the Go to Latest button visibility and count
@@ -166,7 +171,9 @@ function updateGoToLatestButton() {
 
 // Scroll to bottom and reset missed count
 function scrollToLatest() {
-    container.scrollTop = container.scrollHeight;
+    if (virtualTable) {
+        virtualTable.scrollToEnd();
+    }
     missedPackets = 0;
     autoScrollEnabled = true;
     autoscrollToggle.classList.add('active');
@@ -184,16 +191,14 @@ function toggleAutoScroll() {
 }
 
 export function renderPackets() {
-    packetList.innerHTML = '';
-
     // Update filter state
     filterState.text = filterInput.value;
     filterState.parsed = parseFilter(filterInput.value);
 
     const hasActiveFilter = filterState.direction !== 'all' || filterState.text.trim();
 
-    // Filter or process all packets
-    let processedPackets = packets.map(p => {
+    // Process all packets
+    processedPackets = packets.map(p => {
         const matches = matchesFilter(p, filterState.direction, filterState.parsed);
         const matchPositions = matches && filterState.highlightMode ? findMatchPositions(p, filterState.parsed) : null;
         return { packet: p, matches, matchPositions };
@@ -220,45 +225,12 @@ export function renderPackets() {
         });
     }
 
-    // Render rows
-    processedPackets.forEach(({ packet: p, matches, matchPositions }) => {
-        const row = document.createElement('tr');
-        row.packet = p;
-
-        if (selectedPackets.includes(p)) {
-            row.classList.add('selected');
-        }
-
-        // Apply highlight mode classes
-        if (filterState.highlightMode && hasActiveFilter) {
-            if (matches) {
-                row.classList.add('highlight-match');
-            } else {
-                row.classList.add('highlight-no-match');
-            }
-        }
-
-        // Generate hex HTML with optional highlighting
-        let hexHtml = p.hexFormatted;
-        if (matchPositions && matchPositions.length > 0) {
-            hexHtml = generateHighlightedHex(p.hexRaw, matchPositions);
-        }
-
-        row.innerHTML = `
-            <td>${p.time}</td>
-            <td class="direction ${p.direction.includes('UP ->') ? 'up' : 'down'}">${p.direction}</td>
-            <td>${p.length}</td>
-            <td class="hex">${hexHtml}</td>
-            <td class="ascii">${p.ascii}</td>
-        `;
-        packetList.appendChild(row);
-    });
-
-    updateColumnVisibility();
+    // Update virtual table
+    virtualTable.setData(processedPackets);
 
     // Auto-scroll to bottom if enabled and no filter/sort active
     if (autoScrollEnabled && !hasActiveFilter && !currentSort.field) {
-        container.scrollTop = container.scrollHeight;
+        virtualTable.scrollToEnd();
     }
 }
 
@@ -291,6 +263,50 @@ function generateHighlightedHex(hexRaw, matchPositions) {
     return formattedHex;
 }
 
+// Render a single row for virtual table
+function renderTableRow(row, item, index) {
+    const { packet: p, matches, matchPositions } = item;
+    const hasActiveFilter = filterState.direction !== 'all' || filterState.text.trim();
+
+    // Clear existing classes
+    row.className = '';
+    row.dataset.index = index;
+
+    if (selectedPackets.includes(p)) {
+        row.classList.add('selected');
+    }
+
+    // Apply highlight mode classes
+    if (filterState.highlightMode && hasActiveFilter) {
+        if (matches) {
+            row.classList.add('highlight-match');
+        } else {
+            row.classList.add('highlight-no-match');
+        }
+    }
+
+    // Generate hex HTML with optional highlighting
+    let hexHtml = p.hexFormatted;
+    if (matchPositions && matchPositions.length > 0) {
+        hexHtml = generateHighlightedHex(p.hexRaw, matchPositions);
+    }
+
+    row.innerHTML = `
+        <td>${p.time}</td>
+        <td class="direction ${p.direction.includes('UP ->') ? 'up' : 'down'}">${p.direction}</td>
+        <td>${p.length}</td>
+        <td class="hex">${hexHtml}</td>
+        <td class="ascii">${p.ascii}</td>
+    `;
+
+    applyColumnVisibility(row);
+}
+
+// Handle row click for selection
+function handleRowClick(row, item, index) {
+    togglePacketSelection(row, item.packet);
+}
+
 export function togglePacketSelection(row, packet) {
     if (selectedPackets.includes(packet)) {
         const idx = selectedPackets.indexOf(packet);
@@ -299,10 +315,11 @@ export function togglePacketSelection(row, packet) {
     } else {
         if (selectedPackets.length >= 2) {
             const removed = selectedPackets.shift();
-            const rows = document.querySelectorAll('.packet-table tbody tr');
-            rows.forEach(r => {
-                if (r.packet === removed) r.classList.remove('selected');
-            });
+            // Find and update the row for the removed packet
+            const removedIndex = processedPackets.findIndex(item => item.packet === removed);
+            if (removedIndex >= 0) {
+                virtualTable.updateRow(removedIndex);
+            }
         }
         selectedPackets.push(packet);
         row.classList.add('selected');
@@ -315,7 +332,8 @@ export function togglePacketSelection(row, packet) {
 export function clearPackets() {
     packets.length = 0;
     selectedPackets.length = 0;
-    packetList.innerHTML = '';
+    processedPackets = [];
+    virtualTable.setData([]);
     diffBtn.innerText = `Diff (0/2)`;
     diffBtn.disabled = true;
     missedPackets = 0;
@@ -328,9 +346,10 @@ export function updateColumnVisibility() {
         th.style.display = hiddenColumns.has(col) ? 'none' : '';
     });
 
-    document.querySelectorAll('.packet-table tbody tr').forEach(row => {
-        applyColumnVisibility(row);
-    });
+    // Re-render visible rows to apply column visibility
+    if (virtualTable) {
+        virtualTable.render();
+    }
 }
 
 function applyColumnVisibility(row) {
@@ -355,6 +374,16 @@ function loadCustomPresets() {
 }
 
 export function initPackets() {
+    // Initialize virtual table
+    virtualTable = new VirtualTable({
+        container: container,
+        tbody: packetList,
+        rowHeight: 32,
+        overscan: 10,
+        renderRow: renderTableRow,
+        onRowClick: handleRowClick
+    });
+
     // Load custom presets on init
     loadCustomPresets();
 
@@ -467,14 +496,6 @@ export function initPackets() {
             }
             updateColumnVisibility();
         });
-    });
-
-    // Packet Selection Delegation
-    packetList.addEventListener('click', (e) => {
-        const row = e.target.closest('tr');
-        if (row && row.packet) {
-            togglePacketSelection(row, row.packet);
-        }
     });
 
     // Auto-scroll toggle button

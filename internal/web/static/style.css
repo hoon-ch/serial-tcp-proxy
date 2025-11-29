@@ -1056,3 +1056,18 @@ body {
 .packet-table tr.highlight-no-match {
     opacity: 0.4;
 }
+
+/* Virtual Scrolling Styles */
+.packet-table tr.virtual-spacer {
+    background: transparent !important;
+    border: none;
+}
+
+.packet-table tr.virtual-spacer td {
+    padding: 0;
+    border: none;
+}
+
+.packet-table tbody {
+    position: relative;
+}
