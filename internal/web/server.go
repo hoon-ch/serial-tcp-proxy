@@ -455,7 +455,11 @@ type wsMessage struct {
 
 // handleWebSocket handles WebSocket connections for real-time events
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	// Set response headers for proxy compatibility (Home Assistant Ingress)
+	responseHeader := http.Header{}
+	responseHeader.Set("X-Accel-Buffering", "no") // Disable nginx buffering
+
+	conn, err := wsUpgrader.Upgrade(w, r, responseHeader)
 	if err != nil {
 		s.logger.Error("WebSocket upgrade failed: %v", err)
 		return
