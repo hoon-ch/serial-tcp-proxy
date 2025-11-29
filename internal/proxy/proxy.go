@@ -162,6 +162,14 @@ func (ps *Server) handleClient(cl *client.Client) {
 	defer ps.wg.Done()
 	defer ps.clients.Remove(cl.ID)
 
+	// Enable TCP keepalive to detect dead connections
+	// This replaces read deadline - connections stay open indefinitely
+	// but dead connections are detected via OS-level keepalive probes
+	if tcpConn, ok := cl.Conn.(*net.TCPConn); ok {
+		_ = tcpConn.SetKeepAlive(true)
+		_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
+	}
+
 	// Get buffer from pool for zero-copy
 	bufPtr := bufferPool.Get().(*[]byte)
 	buf := *bufPtr
@@ -174,9 +182,8 @@ func (ps *Server) handleClient(cl *client.Client) {
 		default:
 		}
 
-		// Set read deadline
-		_ = cl.Conn.SetReadDeadline(time.Now().Add(time.Minute))
-
+		// No read deadline - client connections stay open indefinitely
+		// TCP keepalive will detect and close dead connections
 		n, err := cl.Conn.Read(buf)
 		if err != nil {
 			return
@@ -207,15 +214,35 @@ func (ps *Server) GetStatus() map[string]interface{} {
 		"upstream_state":    ps.upstream.GetState().String(),
 		"upstream_addr":     ps.config.UpstreamAddr(),
 		"listen_addr":       ps.config.ListenAddr(),
-		"connected_clients": ps.clients.Count(),
+		"connected_clients": ps.clients.TotalCount(),
 		"max_clients":       ps.config.MaxClients,
 		"start_time":        ps.startTime.Format(time.RFC3339),
 	}
 }
 
-// GetClientCount returns the number of connected clients
+// GetClientCount returns the total number of connected clients (TCP + Web)
 func (ps *Server) GetClientCount() int {
+	return ps.clients.TotalCount()
+}
+
+// GetTCPClientCount returns the number of TCP proxy clients
+func (ps *Server) GetTCPClientCount() int {
 	return ps.clients.Count()
+}
+
+// GetWebClientCount returns the number of web UI clients
+func (ps *Server) GetWebClientCount() int {
+	return ps.clients.WebClientCount()
+}
+
+// AddWebClient registers a web client connection
+func (ps *Server) AddWebClient() error {
+	return ps.clients.AddWebClient()
+}
+
+// RemoveWebClient unregisters a web client connection
+func (ps *Server) RemoveWebClient() {
+	ps.clients.RemoveWebClient()
 }
 
 // IsUpstreamConnected returns whether the upstream is connected
@@ -252,6 +279,41 @@ func (ps *Server) IsListening() bool {
 
 // ErrInvalidTarget is returned when an invalid target is specified for packet injection
 var ErrInvalidTarget = fmt.Errorf("invalid target: must be 'upstream' or 'downstream'")
+
+// ClientInfo represents information about a connected client
+type ClientInfo struct {
+	ID          string `json:"id"`
+	Addr        string `json:"addr"`
+	ConnectedAt string `json:"connected_at"`
+	Type        string `json:"type"` // "tcp" or "web"
+}
+
+// GetClients returns information about all connected clients
+func (ps *Server) GetClients() []ClientInfo {
+	tcpClients := ps.clients.GetAll()
+	result := make([]ClientInfo, 0, len(tcpClients))
+
+	for _, c := range tcpClients {
+		result = append(result, ClientInfo{
+			ID:          c.ID,
+			Addr:        c.Addr,
+			ConnectedAt: c.ConnectedAt.Format("2006-01-02T15:04:05Z07:00"),
+			Type:        "tcp",
+		})
+	}
+
+	return result
+}
+
+// DisconnectClient disconnects a client by ID
+func (ps *Server) DisconnectClient(id string) bool {
+	client := ps.clients.Get(id)
+	if client == nil {
+		return false
+	}
+	ps.clients.Remove(id)
+	return true
+}
 
 // InjectPacket injects a packet to the specified target (upstream or downstream)
 func (ps *Server) InjectPacket(target string, data []byte) error {

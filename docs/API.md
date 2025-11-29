@@ -24,7 +24,10 @@ curl -u admin:password http://localhost:18080/api/status
 | `/api/status` | Yes |
 | `/api/config` | Yes |
 | `/api/events` | Yes |
+| `/api/ws` | Yes |
 | `/api/inject` | Yes |
+| `/api/clients` | Yes |
+| `/api/clients/disconnect` | Yes |
 | `/` (static files) | Yes |
 
 ---
@@ -224,6 +227,105 @@ Invalid Hex: encoding/hex: invalid byte: U+005A 'Z'
 **Error (500)** - Upstream not connected
 ```
 Injection failed: upstream not connected
+```
+
+---
+
+### WebSocket Events
+
+Subscribe to real-time log and status updates via WebSocket (recommended over SSE for better proxy compatibility).
+
+```
+GET /api/ws
+```
+
+**Authentication:** Required
+
+#### Message Format
+
+```json
+{
+  "type": "status",
+  "data": {"upstream_state": "Connected", "connected_clients": 2, ...}
+}
+```
+
+```json
+{
+  "type": "log",
+  "data": "2025-11-28T00:00:00Z [PKT] [UP->] f7 0e 11 41 01 01 5e 02 (8 bytes)"
+}
+```
+
+---
+
+### List Clients
+
+Get list of connected clients (TCP and Web).
+
+```
+GET /api/clients
+```
+
+**Authentication:** Required
+
+#### Response
+
+```json
+{
+  "clients": [
+    {
+      "id": "client#1",
+      "addr": "192.168.1.100:52431",
+      "connected_at": "2025-11-28T00:00:00Z",
+      "type": "tcp"
+    },
+    {
+      "id": "web#1",
+      "addr": "192.168.1.101:52432",
+      "connected_at": "2025-11-28T00:01:00Z",
+      "type": "web"
+    }
+  ],
+  "tcp_count": 1,
+  "web_count": 1,
+  "total_count": 2,
+  "max_clients": 10
+}
+```
+
+---
+
+### Disconnect Client
+
+Disconnect a specific client by ID.
+
+```
+POST /api/clients/disconnect
+```
+
+**Authentication:** Required
+
+#### Request Body
+
+```json
+{
+  "client_id": "client#1"
+}
+```
+
+#### Response
+
+**Success (200)**
+```json
+{
+  "success": true
+}
+```
+
+**Error (404)** - Client not found
+```
+Client not found
 ```
 
 ---

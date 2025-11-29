@@ -18,11 +18,12 @@ type Client struct {
 }
 
 type Manager struct {
-	clients    map[string]*Client
-	mu         sync.RWMutex
-	maxClients int
-	counter    atomic.Uint64
-	logger     *logger.Logger
+	clients      map[string]*Client
+	mu           sync.RWMutex
+	maxClients   int
+	counter      atomic.Uint64
+	webClients   atomic.Int32 // Count of web UI clients (SSE/WebSocket)
+	logger       *logger.Logger
 }
 
 func NewManager(maxClients int, log *logger.Logger) *Manager {
@@ -37,7 +38,8 @@ func (cm *Manager) Add(conn net.Conn) (*Client, error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	if len(cm.clients) >= cm.maxClients {
+	totalClients := len(cm.clients) + int(cm.webClients.Load())
+	if totalClients >= cm.maxClients {
 		return nil, fmt.Errorf("max clients (%d) reached", cm.maxClients)
 	}
 
@@ -50,7 +52,8 @@ func (cm *Manager) Add(conn net.Conn) (*Client, error) {
 	}
 
 	cm.clients[id] = client
-	cm.logger.Info("Client connected: %s [%s] (total: %d)", client.Addr, id, len(cm.clients))
+	newTotal := len(cm.clients) + int(cm.webClients.Load())
+	cm.logger.Info("Client connected: %s [%s] (total: %d)", client.Addr, id, newTotal)
 
 	return client, nil
 }
@@ -62,7 +65,8 @@ func (cm *Manager) Remove(id string) {
 	if client, ok := cm.clients[id]; ok {
 		client.Conn.Close()
 		delete(cm.clients, id)
-		cm.logger.Info("Client disconnected: %s [%s] (total: %d)", client.Addr, id, len(cm.clients))
+		newTotal := len(cm.clients) + int(cm.webClients.Load())
+		cm.logger.Info("Client disconnected: %s [%s] (total: %d)", client.Addr, id, newTotal)
 	}
 }
 
@@ -87,6 +91,50 @@ func (cm *Manager) Count() int {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 	return len(cm.clients)
+}
+
+// TotalCount returns the total count of all clients (TCP + Web)
+func (cm *Manager) TotalCount() int {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return len(cm.clients) + int(cm.webClients.Load())
+}
+
+// AddWebClient increments the web client counter
+// Returns error if max clients would be exceeded
+func (cm *Manager) AddWebClient() error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	totalClients := len(cm.clients) + int(cm.webClients.Load())
+	if totalClients >= cm.maxClients {
+		return fmt.Errorf("max clients (%d) reached", cm.maxClients)
+	}
+
+	cm.webClients.Add(1)
+	newTotal := len(cm.clients) + int(cm.webClients.Load())
+	cm.logger.Info("Web client connected (total: %d)", newTotal)
+	return nil
+}
+
+// RemoveWebClient decrements the web client counter
+func (cm *Manager) RemoveWebClient() {
+	// Prevent negative count
+	for {
+		current := cm.webClients.Load()
+		if current <= 0 {
+			return
+		}
+		if cm.webClients.CompareAndSwap(current, current-1) {
+			cm.logger.Info("Web client disconnected (total: %d)", cm.TotalCount())
+			return
+		}
+	}
+}
+
+// WebClientCount returns the count of web clients
+func (cm *Manager) WebClientCount() int {
+	return int(cm.webClients.Load())
 }
 
 func (cm *Manager) Broadcast(data []byte) {

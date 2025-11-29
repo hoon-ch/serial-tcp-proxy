@@ -1766,3 +1766,185 @@ func TestHandleInject_Downstream(t *testing.T) {
 		t.Errorf("Expected status 200, got %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 }
+
+func TestHandleClients(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	// Test GET request
+	req := httptest.NewRequest(http.MethodGet, "/api/clients", nil)
+	w := httptest.NewRecorder()
+
+	webServer.handleClients(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	var result ClientsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if result.MaxClients != 10 {
+		t.Errorf("Expected MaxClients 10, got %d", result.MaxClients)
+	}
+}
+
+func TestHandleClients_MethodNotAllowed(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/clients", nil)
+	w := httptest.NewRecorder()
+
+	webServer.handleClients(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("Expected status 405, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleDisconnectClient_InvalidJSON(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/clients/disconnect", strings.NewReader("invalid json"))
+	w := httptest.NewRecorder()
+
+	webServer.handleDisconnectClient(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleDisconnectClient_MissingClientID(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/clients/disconnect", strings.NewReader(`{"client_id": ""}`))
+	w := httptest.NewRecorder()
+
+	webServer.handleDisconnectClient(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleDisconnectClient_NotFound(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/clients/disconnect", strings.NewReader(`{"client_id": "client#999"}`))
+	w := httptest.NewRecorder()
+
+	webServer.handleDisconnectClient(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("Expected status 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestDisconnectWebClient_NotFound(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+	webServer := NewServer(cfg, p, log)
+
+	result := webServer.disconnectWebClient("web#999")
+	if result {
+		t.Error("Expected false for non-existent web client")
+	}
+}
+
+func TestRemoveWebClient_NegativeProtection(t *testing.T) {
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: 8899,
+		ListenPort:   18899,
+		MaxClients:   10,
+		WebPort:      18080,
+	}
+
+	log := newTestLogger()
+	p := proxy.NewServer(cfg, log)
+
+	// Call RemoveWebClient without any AddWebClient
+	// Should not panic and count should stay at 0
+	p.RemoveWebClient()
+	p.RemoveWebClient()
+
+	count := p.GetWebClientCount()
+	if count < 0 {
+		t.Errorf("Web client count went negative: %d", count)
+	}
+}

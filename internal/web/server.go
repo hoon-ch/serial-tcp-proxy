@@ -33,22 +33,28 @@ var wsUpgrader = websocket.Upgrader{
 
 // wsClient represents a WebSocket client connection
 type wsClient struct {
-	conn   *websocket.Conn
-	send   chan []byte
-	server *Server
+	conn        *websocket.Conn
+	send        chan []byte
+	server      *Server
+	closed      bool
+	closedMu    sync.Mutex
+	id          string
+	addr        string
+	connectedAt time.Time
 }
 
 type Server struct {
-	config      *config.Config
-	proxy       *proxy.Server
-	logger      *logger.Logger
-	httpServer  *http.Server
-	clients     map[chan string]bool
-	clientsMu   sync.Mutex
-	wsClients   map[*wsClient]bool
-	wsClientsMu sync.Mutex
-	logBuffer   []string
-	logBufferMu sync.Mutex
+	config        *config.Config
+	proxy         *proxy.Server
+	logger        *logger.Logger
+	httpServer    *http.Server
+	clients       map[chan string]bool
+	clientsMu     sync.Mutex
+	wsClients     map[*wsClient]bool
+	wsClientsMu   sync.Mutex
+	wsClientCount uint64
+	logBuffer     []string
+	logBufferMu   sync.Mutex
 }
 
 func NewServer(cfg *config.Config, p *proxy.Server, l *logger.Logger) *Server {
@@ -127,6 +133,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/events", s.authMiddleware(s.handleEvents)) // Legacy SSE endpoint
 	mux.HandleFunc("/api/ws", s.authMiddleware(s.handleWebSocket))  // WebSocket endpoint
 	mux.HandleFunc("/api/inject", s.authMiddleware(s.handleInject))
+	mux.HandleFunc("/api/clients", s.authMiddleware(s.handleClients))
+	mux.HandleFunc("/api/clients/disconnect", s.authMiddleware(s.handleDisconnectClient))
 
 	// Static files (protected)
 	staticRoot, err := fs.Sub(staticFS, "static")
@@ -348,6 +356,12 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Register as web client (counts toward maxClients)
+	if err := s.proxy.AddWebClient(); err != nil {
+		http.Error(w, "Max clients reached", http.StatusServiceUnavailable)
+		return
+	}
+
 	// Set headers for SSE - critical for proxy compatibility
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -377,6 +391,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		delete(s.clients, clientChan)
 		s.clientsMu.Unlock()
 		close(clientChan)
+		s.proxy.RemoveWebClient()
 	}()
 
 	// Helper function to write and flush SSE event
@@ -455,6 +470,12 @@ type wsMessage struct {
 
 // handleWebSocket handles WebSocket connections for real-time events
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// Register as web client (counts toward maxClients)
+	if err := s.proxy.AddWebClient(); err != nil {
+		http.Error(w, "Max clients reached", http.StatusServiceUnavailable)
+		return
+	}
+
 	// Set response headers for proxy compatibility (Home Assistant Ingress)
 	responseHeader := http.Header{}
 	responseHeader.Set("X-Accel-Buffering", "no") // Disable nginx buffering
@@ -462,13 +483,23 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := wsUpgrader.Upgrade(w, r, responseHeader)
 	if err != nil {
 		s.logger.Error("WebSocket upgrade failed: %v", err)
+		s.proxy.RemoveWebClient()
 		return
 	}
 
+	// Generate unique ID for web client
+	s.wsClientsMu.Lock()
+	s.wsClientCount++
+	clientID := fmt.Sprintf("web#%d", s.wsClientCount)
+	s.wsClientsMu.Unlock()
+
 	client := &wsClient{
-		conn:   conn,
-		send:   make(chan []byte, 256),
-		server: s,
+		conn:        conn,
+		send:        make(chan []byte, 256),
+		server:      s,
+		id:          clientID,
+		addr:        r.RemoteAddr,
+		connectedAt: time.Now(),
 	}
 
 	// Register client
@@ -499,6 +530,28 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	go client.readPump()
 }
 
+// close safely closes the client and cleans up resources
+func (c *wsClient) close() {
+	c.closedMu.Lock()
+	if c.closed {
+		c.closedMu.Unlock()
+		return
+	}
+	c.closed = true
+	c.closedMu.Unlock()
+
+	// Remove from server's client list
+	c.server.wsClientsMu.Lock()
+	delete(c.server.wsClients, c)
+	c.server.wsClientsMu.Unlock()
+
+	// Decrement web client count
+	c.server.proxy.RemoveWebClient()
+
+	// Close connection
+	c.conn.Close()
+}
+
 // writePump pumps messages from the send channel to the WebSocket connection
 func (c *wsClient) writePump() {
 	ticker := time.NewTicker(2 * time.Second) // Status update interval
@@ -506,10 +559,7 @@ func (c *wsClient) writePump() {
 	defer func() {
 		ticker.Stop()
 		pingTicker.Stop()
-		c.conn.Close()
-		c.server.wsClientsMu.Lock()
-		delete(c.server.wsClients, c)
-		c.server.wsClientsMu.Unlock()
+		c.close()
 	}()
 
 	for {
@@ -552,10 +602,8 @@ func (c *wsClient) writePump() {
 // readPump pumps messages from the WebSocket connection (handles pongs and close)
 func (c *wsClient) readPump() {
 	defer func() {
-		c.server.wsClientsMu.Lock()
-		delete(c.server.wsClients, c)
-		c.server.wsClientsMu.Unlock()
-		c.conn.Close()
+		// Safely close client and cleanup resources
+		c.close()
 	}()
 
 	c.conn.SetReadLimit(512)
@@ -586,15 +634,26 @@ func (s *Server) broadcastToWebSocket(msgType string, data interface{}) {
 	}
 
 	s.wsClientsMu.Lock()
-	defer s.wsClientsMu.Unlock()
-
+	clients := make([]*wsClient, 0, len(s.wsClients))
 	for client := range s.wsClients {
+		clients = append(clients, client)
+	}
+	s.wsClientsMu.Unlock()
+
+	for _, client := range clients {
+		// Check if client is already closed before sending
+		client.closedMu.Lock()
+		if client.closed {
+			client.closedMu.Unlock()
+			continue
+		}
+		client.closedMu.Unlock()
+
 		select {
 		case client.send <- jsonData:
 		default:
 			// Client too slow, close connection
-			close(client.send)
-			delete(s.wsClients, client)
+			go client.close()
 		}
 	}
 }
@@ -645,4 +704,112 @@ func (s *Server) handleInject(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
 		s.logger.Error("Failed to encode inject response: %v", err)
 	}
+}
+
+// ClientsResponse represents the response for the clients endpoint
+type ClientsResponse struct {
+	Clients    []proxy.ClientInfo `json:"clients"`
+	TCPCount   int                `json:"tcp_count"`
+	WebCount   int                `json:"web_count"`
+	TotalCount int                `json:"total_count"`
+	MaxClients int                `json:"max_clients"`
+}
+
+func (s *Server) handleClients(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get TCP clients
+	clients := s.proxy.GetClients()
+
+	// Add web clients
+	s.wsClientsMu.Lock()
+	for client := range s.wsClients {
+		clients = append(clients, proxy.ClientInfo{
+			ID:          client.id,
+			Addr:        client.addr,
+			ConnectedAt: client.connectedAt.Format(time.RFC3339),
+			Type:        "web",
+		})
+	}
+	s.wsClientsMu.Unlock()
+
+	response := ClientsResponse{
+		Clients:    clients,
+		TCPCount:   s.proxy.GetTCPClientCount(),
+		WebCount:   s.proxy.GetWebClientCount(),
+		TotalCount: s.proxy.GetClientCount(),
+		MaxClients: s.proxy.GetMaxClients(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Error("Failed to encode clients response: %v", err)
+	}
+}
+
+type DisconnectRequest struct {
+	ClientID string `json:"client_id"`
+}
+
+func (s *Server) handleDisconnectClient(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req DisconnectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.ClientID == "" {
+		http.Error(w, "client_id is required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if it's a web client
+	if strings.HasPrefix(req.ClientID, "web#") {
+		success := s.disconnectWebClient(req.ClientID)
+		if !success {
+			http.Error(w, "Client not found", http.StatusNotFound)
+			return
+		}
+	} else {
+		// TCP client
+		success := s.proxy.DisconnectClient(req.ClientID)
+		if !success {
+			http.Error(w, "Client not found", http.StatusNotFound)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
+		s.logger.Error("Failed to encode disconnect response: %v", err)
+	}
+}
+
+// disconnectWebClient disconnects a web client by ID
+func (s *Server) disconnectWebClient(id string) bool {
+	s.wsClientsMu.Lock()
+	var target *wsClient
+	for client := range s.wsClients {
+		if client.id == id {
+			target = client
+			break
+		}
+	}
+	s.wsClientsMu.Unlock()
+
+	if target == nil {
+		return false
+	}
+
+	target.close()
+	return true
 }

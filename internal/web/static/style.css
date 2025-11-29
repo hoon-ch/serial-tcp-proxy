@@ -94,6 +94,66 @@ body {
     transition: background-color 0.3s, color 0.3s;
 }
 
+/* Mobile responsive */
+@media (max-width: 768px) {
+    body {
+        height: auto;
+        min-height: 100vh;
+        overflow: auto;
+    }
+
+    .app-container {
+        height: auto;
+        min-height: 100vh;
+    }
+
+    .main-content {
+        min-height: auto;
+    }
+
+    .logs-section {
+        min-height: 400px;
+    }
+
+    .packet-table-container {
+        min-height: 300px;
+        max-height: 50vh;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-group {
+        flex-wrap: wrap;
+    }
+
+    .filter-input-wrapper .filter-input {
+        width: 100%;
+    }
+
+    .section-header {
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: flex-start;
+    }
+
+    .actions {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .actions .btn {
+        flex: 1;
+        min-width: fit-content;
+    }
+}
+
 .app-container {
     display: flex;
     flex-direction: column;
@@ -180,6 +240,16 @@ body {
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--text-primary);
+    min-height: 2.25rem;
+    display: flex;
+    align-items: center;
+}
+
+/* Auto-fit text for long values */
+.stat-card .value.auto-fit {
+    word-break: break-all;
+    overflow-wrap: break-word;
+    line-height: 1.2;
 }
 
 .stat-card .label {
@@ -760,4 +830,461 @@ body {
     background: rgba(59, 130, 246, 0.3) !important;
     border-left: 3px solid var(--accent-color);
     box-shadow: inset 0 0 15px rgba(59, 130, 246, 0.1);
+}
+
+/* Go to Latest Button */
+.go-to-latest-btn {
+    position: absolute;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    transition: all 0.2s ease;
+    z-index: 50;
+    animation: slideUp 0.2s ease-out;
+}
+
+.go-to-latest-btn:hover {
+    background: #2563eb;
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+}
+
+.go-to-latest-btn .arrow {
+    font-size: 1rem;
+    animation: bounce 1s infinite;
+}
+
+.go-to-latest-btn .new-count {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(3px);
+    }
+}
+
+/* Auto-scroll toggle active state */
+#autoscroll-toggle.active {
+    background: var(--accent-color);
+    color: white;
+}
+
+#autoscroll-toggle:not(.active) {
+    background: var(--hover-bg);
+    color: var(--text-secondary);
+}
+
+/* Make packet-table-container position relative for absolute positioning of floating button */
+.packet-table-container {
+    position: relative;
+}
+
+/* Filter Bar */
+.filter-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--diff-bg);
+    border-bottom: 1px solid var(--border-color);
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* Direction Filter Button Group */
+.btn-group {
+    display: flex;
+    border-radius: 0.375rem;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.btn-filter {
+    padding: 0.375rem 0.75rem;
+    background: var(--card-bg);
+    border: none;
+    border-right: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-filter:last-child {
+    border-right: none;
+}
+
+.btn-filter:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+}
+
+.btn-filter.active {
+    background: var(--accent-color);
+    color: white;
+}
+
+/* Filter Input Wrapper */
+.filter-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.filter-input-wrapper .filter-input {
+    width: 320px;
+    padding-right: 2rem;
+}
+
+.filter-help-btn {
+    position: absolute;
+    right: 0.5rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    background: var(--hover-bg);
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.filter-help-btn:hover {
+    background: var(--accent-color);
+    color: white;
+}
+
+/* Filter Presets */
+.filter-presets {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.filter-presets select {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.filter-presets select:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+/* Highlight Toggle */
+#highlight-toggle.active {
+    background: #f59e0b;
+    color: white;
+    border-color: #f59e0b;
+}
+
+/* Filter Help Modal */
+.modal-small {
+    max-width: 600px;
+}
+
+.filter-help-content {
+    padding: 1rem;
+}
+
+.help-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.help-table th,
+.help-table td {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.help-table th {
+    background: var(--table-header-bg);
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.help-table code {
+    background: var(--code-block-bg);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+}
+
+.help-note {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: var(--active-bg);
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* Save Preset Modal */
+.save-preset-content {
+    padding: 1rem;
+}
+
+.save-preset-content .form-group {
+    margin-bottom: 1rem;
+}
+
+.save-preset-content label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.save-preset-content input {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+}
+
+.save-preset-content input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.save-preset-content input[readonly] {
+    background: var(--hover-bg);
+    color: var(--text-secondary);
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+/* Highlight Mode Styles */
+.packet-table tr.highlight-match {
+    background: rgba(245, 158, 11, 0.15) !important;
+}
+
+.packet-table tr.highlight-match td {
+    position: relative;
+}
+
+.packet-table .hex .highlight-byte {
+    background: rgba(245, 158, 11, 0.4);
+    border-radius: 2px;
+    padding: 0 2px;
+}
+
+.packet-table tr.highlight-no-match {
+    opacity: 0.4;
+}
+
+/* Virtual Scrolling Styles */
+.packet-table tr.virtual-spacer {
+    background: transparent !important;
+    border: none;
+}
+
+.packet-table tr.virtual-spacer td {
+    padding: 0;
+    border: none;
+}
+
+.packet-table tbody {
+    position: relative;
+}
+
+/* Clickable Stat Card */
+.stat-card-clickable {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.stat-card-clickable:hover {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.stat-card-clickable:active {
+    transform: scale(0.98);
+}
+
+/* Modal Medium Size */
+.modal-medium {
+    max-width: 700px;
+}
+
+/* Clients Modal */
+.clients-modal-content {
+    padding: 1rem;
+}
+
+.clients-summary {
+    display: flex;
+    gap: 1.5rem;
+    padding: 1rem;
+    background: var(--diff-bg);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.summary-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.summary-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.clients-table-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+}
+
+.clients-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.clients-table th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    background: var(--table-header-bg);
+    color: var(--text-secondary);
+    font-weight: 500;
+    position: sticky;
+    top: 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.clients-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.clients-table tr:hover {
+    background: var(--hover-bg);
+}
+
+.clients-table .client-id {
+    font-family: var(--font-mono);
+    color: var(--accent-color);
+}
+
+.clients-table .client-addr {
+    font-family: var(--font-mono);
+}
+
+.clients-table .client-type {
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    display: inline-block;
+}
+
+.clients-table .client-type.tcp {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success-color);
+}
+
+.clients-table .client-type.web {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent-color);
+}
+
+.clients-table .client-time {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+}
+
+.btn-disconnect {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    background: var(--error-color);
+    color: white;
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-disconnect:hover {
+    background: #dc2626;
+}
+
+.btn-disconnect:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.no-clients {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
 }

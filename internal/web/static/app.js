@@ -14,6 +14,7 @@ import { initInjection } from './modules/injection.js';
 import { updateInspector, renderDiff } from './modules/inspector.js';
 import { initTheme } from './modules/theme.js';
 import { apiUrl, wsUrl } from './modules/api.js';
+import { initClients } from './modules/clients.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize UI Modules
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initInjection();
     initPackets();
+    initClients();
 
     let startTime = null;
     let isPaused = false;
