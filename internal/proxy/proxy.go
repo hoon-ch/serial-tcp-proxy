@@ -162,6 +162,12 @@ func (ps *Server) handleClient(cl *client.Client) {
 	defer ps.wg.Done()
 	defer ps.clients.Remove(cl.ID)
 
+	// Enable TCP keepalive to detect dead connections
+	if tcpConn, ok := cl.Conn.(*net.TCPConn); ok {
+		_ = tcpConn.SetKeepAlive(true)
+		_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
+	}
+
 	// Get buffer from pool for zero-copy
 	bufPtr := bufferPool.Get().(*[]byte)
 	buf := *bufPtr
@@ -174,8 +180,9 @@ func (ps *Server) handleClient(cl *client.Client) {
 		default:
 		}
 
-		// Set read deadline
-		_ = cl.Conn.SetReadDeadline(time.Now().Add(time.Minute))
+		// Set read deadline - use longer timeout for idle connections
+		// This allows clients that only receive data (not send) to stay connected
+		_ = cl.Conn.SetReadDeadline(time.Now().Add(30 * time.Minute))
 
 		n, err := cl.Conn.Read(buf)
 		if err != nil {
