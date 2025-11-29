@@ -59,8 +59,13 @@ function renderClients(data) {
 
     noClientsMessage.style.display = 'none';
 
+    // Sort clients by connected_at (oldest first)
+    const sortedClients = [...data.clients].sort((a, b) =>
+        new Date(a.connected_at) - new Date(b.connected_at)
+    );
+
     // Add client rows
-    data.clients.forEach(client => {
+    sortedClients.forEach(client => {
         const row = document.createElement('tr');
         row.innerHTML = `
             <td class="client-id">${client.id}</td>
