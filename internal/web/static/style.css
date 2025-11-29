@@ -180,6 +180,14 @@ body {
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--text-primary);
+    word-break: break-all;
+    overflow-wrap: break-word;
+}
+
+/* Auto-fit text for long values */
+.stat-card .value.auto-fit {
+    font-size: clamp(0.875rem, 3vw, 1.5rem);
+    line-height: 1.2;
 }
 
 .stat-card .label {

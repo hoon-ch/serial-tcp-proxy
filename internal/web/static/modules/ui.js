@@ -28,6 +28,7 @@ export function updateStatus(data) {
     statusText.textContent = data.upstream_state;
 
     upstreamAddr.textContent = data.upstream_addr;
+    adjustFontSize(upstreamAddr);
     listenPort.textContent = data.listen_addr.replace(':', '');
     clientCount.textContent = `${data.connected_clients} / ${data.max_clients}`;
 
@@ -35,6 +36,22 @@ export function updateStatus(data) {
         return new Date(data.start_time);
     }
     return null;
+}
+
+// Adjust font size based on text length
+function adjustFontSize(element) {
+    const text = element.textContent;
+    const len = text.length;
+
+    if (len > 25) {
+        element.style.fontSize = '0.875rem';
+    } else if (len > 20) {
+        element.style.fontSize = '1rem';
+    } else if (len > 15) {
+        element.style.fontSize = '1.125rem';
+    } else {
+        element.style.fontSize = '';  // Reset to default
+    }
 }
 
 export function updateUptime(startTime) {
