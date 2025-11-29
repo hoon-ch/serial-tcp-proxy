@@ -142,6 +142,87 @@ docs: add API documentation
 - [ ] Documentation updated if needed
 - [ ] Commit messages follow convention
 
+## Release Process
+
+This project uses automated releases triggered by GitHub Releases.
+
+### How to Create a Release
+
+1. **Go to GitHub Releases**
+   - Navigate to the repository on GitHub
+   - Click "Releases" in the right sidebar
+   - Click "Draft a new release"
+
+2. **Create a New Tag**
+   - In the "Choose a tag" dropdown, type your version (e.g., `v1.3.0`)
+   - Select "Create new tag: v1.3.0 on publish"
+   - Target branch: `main`
+
+3. **Fill Release Information**
+   - **Title**: `v1.3.0 - Brief Description`
+   - **Description**: Summarize key changes (auto-generated release notes available)
+
+4. **Publish**
+   - Click "Publish release"
+   - The Release workflow will automatically:
+     - Update version in `config.yaml`, `README.md`, `docs/API.md`, `docs/README_ko.md`
+     - Update `CHANGELOG.md` (converts `[Unreleased]` to version with date)
+     - Commit version changes to `main`
+     - Build binaries for all platforms
+     - Build and push Docker images
+     - Attach binaries and checksums to the release
+
+### Version Numbering
+
+We follow [Semantic Versioning](https://semver.org/):
+
+```
+MAJOR.MINOR.PATCH
+
+- MAJOR: Breaking changes
+- MINOR: New features (backward compatible)
+- PATCH: Bug fixes (backward compatible)
+```
+
+### Pre-Release Checklist
+
+Before creating a release:
+
+- [ ] All CI checks pass on `main`
+- [ ] `CHANGELOG.md` has `[Unreleased]` section with all changes
+- [ ] Documentation is up to date
+- [ ] No known critical bugs
+
+### Updating CHANGELOG
+
+When making changes, add entries under `[Unreleased]` in `CHANGELOG.md`:
+
+```markdown
+## [Unreleased]
+
+### Added
+- New feature description
+
+### Fixed
+- Bug fix description
+
+### Changed
+- Change description
+```
+
+The release workflow will automatically convert `[Unreleased]` to the version number with the release date.
+
+### Workflow Behavior
+
+| Trigger | CI Runs? | Release Runs? |
+|---------|----------|---------------|
+| PR to main | Yes | No |
+| Merge to main | Yes | No |
+| Version file changes only | No | No |
+| GitHub Release published | No | Yes |
+
+---
+
 ## Reporting Issues
 
 When reporting issues, please include:
