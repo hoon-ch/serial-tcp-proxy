@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.3.0] - 2025-11-30
 
 ### Added
 - **Custom Login Page**: Replaced browser's Basic Auth popup with a styled login page
