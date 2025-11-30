@@ -955,7 +955,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// If auth is disabled, just return success
 	if !s.config.WebAuthEnabled {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]bool{"success": true})
+		if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
+			s.logger.Error("Failed to encode response: %v", err)
+		}
 		return
 	}
 
@@ -963,7 +965,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request body"})
+		if encErr := json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request body"}); encErr != nil {
+			s.logger.Error("Failed to encode response: %v", encErr)
+		}
 		return
 	}
 
@@ -971,7 +975,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("Login failed for user '%s' from %s", req.Username, r.RemoteAddr)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid username or password"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "Invalid username or password"}); err != nil {
+			s.logger.Error("Failed to encode response: %v", err)
+		}
 		return
 	}
 
@@ -981,7 +987,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("Failed to create session: %v", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create session"})
+		if encErr := json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create session"}); encErr != nil {
+			s.logger.Error("Failed to encode response: %v", encErr)
+		}
 		return
 	}
 
@@ -998,7 +1006,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("User '%s' logged in from %s", req.Username, r.RemoteAddr)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
+		s.logger.Error("Failed to encode response: %v", err)
+	}
 }
 
 // handleLogout handles POST /api/logout
@@ -1023,7 +1033,9 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
+		s.logger.Error("Failed to encode response: %v", err)
+	}
 }
 
 // handleAuthCheck handles GET /api/auth/check
@@ -1037,16 +1049,20 @@ func (s *Server) handleAuthCheck(w http.ResponseWriter, r *http.Request) {
 
 	// If auth is disabled, always authenticated
 	if !s.config.WebAuthEnabled {
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"authenticated": true,
 			"auth_enabled":  false,
-		})
+		}); err != nil {
+			s.logger.Error("Failed to encode response: %v", err)
+		}
 		return
 	}
 
 	authenticated := s.getSessionFromRequest(r)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"authenticated": authenticated,
 		"auth_enabled":  true,
-	})
+	}); err != nil {
+		s.logger.Error("Failed to encode response: %v", err)
+	}
 }
