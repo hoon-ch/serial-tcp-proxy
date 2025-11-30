@@ -139,6 +139,9 @@ listen_port: 18899
 max_clients: 10
 log_packets: false
 log_file: "/data/packets.log"
+web_auth_enabled: true
+web_auth_username: "admin"
+web_auth_password: "your-secure-password"
 ```
 
 ### Kubernetes

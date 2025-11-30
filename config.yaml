@@ -26,6 +26,9 @@ options:
   log_packets: false
   log_file: "/data/packets.log"
   web_port: 18080
+  web_auth_enabled: false
+  web_auth_username: ""
+  web_auth_password: ""
 
 schema:
   upstream_host: str
@@ -35,3 +38,6 @@ schema:
   log_packets: bool
   log_file: str
   web_port: port?
+  web_auth_enabled: bool?
+  web_auth_username: str?
+  web_auth_password: password?

@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Home Assistant Add-on**: Auth configuration options now available in Add-on settings
+  - `web_auth_enabled`: Enable/disable Web UI authentication
+  - `web_auth_username`: Basic auth username
+  - `web_auth_password`: Basic auth password (password input type)
+
+### Changed
+- **Documentation**: Updated Web UI section with feature screenshots
+  - Dashboard, Packet Inspector, Client Management, Packet Injection screenshots
+
 ## [1.2.1] - 2025-11-29
 
 ### Fixed
