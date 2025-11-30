@@ -5,14 +5,22 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Custom Login Page**: Replaced browser's Basic Auth popup with a styled login page
+  - Session-based authentication with secure cookies
+  - Automatic redirect to login page for unauthenticated users
+  - Theme toggle support on login page
+  - Compatible with Home Assistant Ingress
 - **Home Assistant Add-on**: Auth configuration options now available in Add-on settings
   - `web_auth_enabled`: Enable/disable Web UI authentication
-  - `web_auth_username`: Basic auth username
-  - `web_auth_password`: Basic auth password (password input type)
+  - `web_auth_username`: Auth username
+  - `web_auth_password`: Auth password (password input type)
 
 ### Changed
+- **Authentication**: Changed from Basic Auth popup to session-based login
+  - Basic Auth still supported for API clients (curl, scripts)
+  - Sessions expire after 24 hours
 - **Documentation**: Updated Web UI section with feature screenshots
-  - Dashboard, Packet Inspector, Client Management, Packet Injection screenshots
+  - Login, Dashboard, Packet Inspector, Client Management, Packet Injection screenshots
 
 ## [1.2.1] - 2025-11-29
 

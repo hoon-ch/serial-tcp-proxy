@@ -2,8 +2,10 @@ package web
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
 	"embed"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -43,6 +45,18 @@ type wsClient struct {
 	connectedAt time.Time
 }
 
+// Session represents an authenticated session
+type Session struct {
+	Token     string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+const (
+	sessionCookieName = "session_token"
+	sessionDuration   = 24 * time.Hour
+)
+
 type Server struct {
 	config        *config.Config
 	proxy         *proxy.Server
@@ -55,6 +69,8 @@ type Server struct {
 	wsClientCount uint64
 	logBuffer     []string
 	logBufferMu   sync.Mutex
+	sessions      map[string]*Session
+	sessionsMu    sync.RWMutex
 }
 
 func NewServer(cfg *config.Config, p *proxy.Server, l *logger.Logger) *Server {
@@ -65,56 +81,153 @@ func NewServer(cfg *config.Config, p *proxy.Server, l *logger.Logger) *Server {
 		clients:   make(map[chan string]bool),
 		wsClients: make(map[*wsClient]bool),
 		logBuffer: make([]string, 0, 1000),
+		sessions:  make(map[string]*Session),
 	}
 
 	// Register log callback
 	l.SetLogCallback(s.broadcastLog)
 
+	// Start session cleanup goroutine
+	go s.cleanupExpiredSessions()
+
 	return s
 }
 
-// validateBasicAuth checks if the request has valid basic auth credentials.
-// Returns true if auth is disabled or credentials are valid.
-// Returns false if auth is enabled but credentials are missing or invalid.
-func (s *Server) validateBasicAuth(r *http.Request) bool {
+// generateSessionToken generates a secure random session token
+func generateSessionToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+// createSession creates a new session and returns the token
+func (s *Server) createSession() (string, error) {
+	token, err := generateSessionToken()
+	if err != nil {
+		return "", err
+	}
+
+	session := &Session{
+		Token:     token,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(sessionDuration),
+	}
+
+	s.sessionsMu.Lock()
+	s.sessions[token] = session
+	s.sessionsMu.Unlock()
+
+	return token, nil
+}
+
+// validateSession checks if a session token is valid
+func (s *Server) validateSession(token string) bool {
+	s.sessionsMu.RLock()
+	session, exists := s.sessions[token]
+	s.sessionsMu.RUnlock()
+
+	if !exists {
+		return false
+	}
+
+	if time.Now().After(session.ExpiresAt) {
+		s.deleteSession(token)
+		return false
+	}
+
+	return true
+}
+
+// deleteSession removes a session
+func (s *Server) deleteSession(token string) {
+	s.sessionsMu.Lock()
+	delete(s.sessions, token)
+	s.sessionsMu.Unlock()
+}
+
+// cleanupExpiredSessions periodically removes expired sessions
+func (s *Server) cleanupExpiredSessions() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.sessionsMu.Lock()
+		now := time.Now()
+		for token, session := range s.sessions {
+			if now.After(session.ExpiresAt) {
+				delete(s.sessions, token)
+			}
+		}
+		s.sessionsMu.Unlock()
+	}
+}
+
+// validateCredentials checks if username and password are correct
+func (s *Server) validateCredentials(username, password string) bool {
+	usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(s.config.WebAuthUsername)) == 1
+	passwordMatch := subtle.ConstantTimeCompare([]byte(password), []byte(s.config.WebAuthPassword)) == 1
+	return usernameMatch && passwordMatch
+}
+
+// getSessionFromRequest extracts and validates session from cookie
+func (s *Server) getSessionFromRequest(r *http.Request) bool {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		return false
+	}
+	return s.validateSession(cookie.Value)
+}
+
+// isAuthenticated checks if request is authenticated (via session or Basic Auth fallback)
+func (s *Server) isAuthenticated(r *http.Request) bool {
 	if !s.config.WebAuthEnabled {
 		return true
 	}
 
-	username, password, ok := r.BasicAuth()
-	if !ok {
-		return false
+	// Check session cookie first
+	if s.getSessionFromRequest(r) {
+		return true
 	}
 
-	usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(s.config.WebAuthUsername)) == 1
-	passwordMatch := subtle.ConstantTimeCompare([]byte(password), []byte(s.config.WebAuthPassword)) == 1
+	// Fallback to Basic Auth for API clients (curl, etc.)
+	username, password, ok := r.BasicAuth()
+	if ok && s.validateCredentials(username, password) {
+		return true
+	}
 
-	return usernameMatch && passwordMatch
+	return false
 }
 
-// sendUnauthorized sends a 401 Unauthorized response with WWW-Authenticate header
-func (s *Server) sendUnauthorized(w http.ResponseWriter, r *http.Request) {
-	s.logger.Warn("Authentication failed: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
-	w.Header().Set("WWW-Authenticate", `Basic realm="Serial TCP Proxy"`)
-	http.Error(w, "Unauthorized", http.StatusUnauthorized)
-}
-
-// authMiddleware wraps a handler with basic authentication
+// authMiddleware wraps a handler with authentication
 func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !s.validateBasicAuth(r) {
-			s.sendUnauthorized(w, r)
+		if !s.isAuthenticated(r) {
+			s.logger.Warn("Authentication failed: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		next(w, r)
 	}
 }
 
-// authHandler wraps an http.Handler with basic authentication
+// authHandler wraps an http.Handler with authentication (for static files)
 func (s *Server) authHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.validateBasicAuth(r) {
-			s.sendUnauthorized(w, r)
+		// Allow login page and its assets without auth
+		if r.URL.Path == "/login.html" || r.URL.Path == "/style.css" || r.URL.Path == "/favicon.png" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if !s.isAuthenticated(r) {
+			// Redirect to login page for browser requests
+			if s.config.WebAuthEnabled {
+				http.Redirect(w, r, "/login.html", http.StatusFound)
+				return
+			}
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -125,8 +238,12 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
 	// API endpoints
-	// /api/health is public for health probes
+	// Public endpoints (no auth required)
 	mux.HandleFunc("/api/health", s.handleHealth)
+	mux.HandleFunc("/api/login", s.handleLogin)
+	mux.HandleFunc("/api/logout", s.handleLogout)
+	mux.HandleFunc("/api/auth/check", s.handleAuthCheck)
+
 	// Protected endpoints require authentication when enabled
 	mux.HandleFunc("/api/status", s.authMiddleware(s.handleStatus))
 	mux.HandleFunc("/api/config", s.authMiddleware(s.handleConfig))
@@ -820,4 +937,116 @@ func (s *Server) disconnectWebClient(id string) bool {
 
 	target.close()
 	return true
+}
+
+// LoginRequest represents the login request body
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// handleLogin handles POST /api/login
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// If auth is disabled, just return success
+	if !s.config.WebAuthEnabled {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"success": true})
+		return
+	}
+
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request body"})
+		return
+	}
+
+	if !s.validateCredentials(req.Username, req.Password) {
+		s.logger.Warn("Login failed for user '%s' from %s", req.Username, r.RemoteAddr)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid username or password"})
+		return
+	}
+
+	// Create session
+	token, err := s.createSession()
+	if err != nil {
+		s.logger.Error("Failed to create session: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create session"})
+		return
+	}
+
+	// Set session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(sessionDuration.Seconds()),
+	})
+
+	s.logger.Info("User '%s' logged in from %s", req.Username, r.RemoteAddr)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// handleLogout handles POST /api/logout
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Delete session if exists
+	if cookie, err := r.Cookie(sessionCookieName); err == nil {
+		s.deleteSession(cookie.Value)
+	}
+
+	// Clear cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// handleAuthCheck handles GET /api/auth/check
+func (s *Server) handleAuthCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// If auth is disabled, always authenticated
+	if !s.config.WebAuthEnabled {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"authenticated": true,
+			"auth_enabled":  false,
+		})
+		return
+	}
+
+	authenticated := s.getSessionFromRequest(r)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"authenticated": authenticated,
+		"auth_enabled":  true,
+	})
 }

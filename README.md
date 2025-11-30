@@ -91,20 +91,45 @@ See [Configuration Guide](docs/CONFIGURATION.md) for all options.
 
 Access the built-in web interface at `http://localhost:18080`.
 
-**Features:**
-- Real-time status monitoring
-- Live log streaming
-- Packet inspector with HEX/ASCII view
-  - Advanced filtering: `dir:up`, `len:>10`, `hex:f7 0e`, `ascii:hello`, `/regex/`
-  - Filter presets with save/load
-  - Virtual scrolling (10,000+ packets)
-  - Auto-scroll with "Go to Latest" button
-- Client management (view/disconnect clients)
-- Packet injection for testing
+### Login
+
+When authentication is enabled, users are greeted with a styled login page.
+
+![Login](docs/images/login.png)
+
+### Dashboard
+
+Real-time status monitoring with upstream connection, client count, uptime, and live logs.
+
+![Dashboard](docs/images/dashboard.png)
+
+### Packet Inspector
+
+Monitor and analyze packets in real-time with HEX/ASCII view.
+
+- Advanced filtering: `dir:up`, `len:>10`, `hex:f7 0e`, `ascii:hello`, `/regex/`
+- Filter presets with save/load
+- Virtual scrolling (10,000+ packets)
+- Auto-scroll with "Go to Latest" button
+
+![Packet Inspector](docs/images/packet-inspector.png)
+
+### Client Management
+
+View connected TCP/Web clients and disconnect if needed.
+
+![Client Management](docs/images/clients.png)
+
+### Packet Injection
+
+Send test packets to upstream (server) or downstream (clients).
+
+![Packet Injection](docs/images/inject.png)
+
+### Other Features
+
 - Dark/Light theme
 - Mobile responsive
-
-![Web UI Screenshot](docs/images/webui.png)
 
 ## API
 

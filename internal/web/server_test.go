@@ -452,15 +452,6 @@ func TestAuthMiddleware_Enabled_NoCredentials(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("Expected status 401 without credentials, got %d", resp.StatusCode)
 	}
-
-	// Check WWW-Authenticate header
-	wwwAuth := resp.Header.Get("WWW-Authenticate")
-	if wwwAuth == "" {
-		t.Error("Expected WWW-Authenticate header")
-	}
-	if wwwAuth != `Basic realm="Serial TCP Proxy"` {
-		t.Errorf("Unexpected WWW-Authenticate header: %s", wwwAuth)
-	}
 }
 
 func TestAuthMiddleware_Enabled_WrongCredentials(t *testing.T) {
@@ -628,6 +619,7 @@ func TestAuthHandler_Enabled_NoCredentials(t *testing.T) {
 
 	handler := webServer.authHandler(innerHandler)
 
+	// Test with a non-login page path that should redirect
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	w := httptest.NewRecorder()
 
@@ -636,8 +628,15 @@ func TestAuthHandler_Enabled_NoCredentials(t *testing.T) {
 	resp := w.Result()
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("Expected status 401 without credentials, got %d", resp.StatusCode)
+	// With session-based auth, unauthenticated requests to protected paths get redirected to login
+	if resp.StatusCode != http.StatusFound {
+		t.Errorf("Expected status 302 (redirect to login) without credentials, got %d", resp.StatusCode)
+	}
+
+	// Check redirect location
+	location := resp.Header.Get("Location")
+	if location != "/login.html" {
+		t.Errorf("Expected redirect to /login.html, got %s", location)
 	}
 }
 
