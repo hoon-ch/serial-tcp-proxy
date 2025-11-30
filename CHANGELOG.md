@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+- Application logo changed
+
 ## [1.3.0] - 2025-11-30
 
 ### Added
