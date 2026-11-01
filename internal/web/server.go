@@ -25,13 +25,9 @@ import (
 //go:embed static
 var staticFS embed.FS
 
-// WebSocket upgrader with permissive origin check for Home Assistant Ingress
 var wsUpgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for Home Assistant Ingress compatibility
-	},
 }
 
 // wsClient represents a WebSocket client connection
@@ -501,7 +497,6 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	// Disable buffering for various proxies
 	w.Header().Set("X-Accel-Buffering", "no")           // nginx
 	w.Header().Set("X-Content-Type-Options", "nosniff") // Prevent content sniffing
