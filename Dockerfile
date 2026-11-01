@@ -1,26 +1,30 @@
-# Build stage
-FROM --platform=$BUILDPLATFORM golang:1.25.4-alpine3.22 AS builder
+FROM --platform=$BUILDPLATFORM rust:1.90-bookworm AS builder
 
-ARG TARGETOS
-ARG TARGETARCH
+ARG TARGETPLATFORM
 ARG VERSION=dev
 
+RUN apt-get update && apt-get install -y --no-install-recommends python3-pip \
+    && pip3 install --break-system-packages cargo-zigbuild==0.20.1 ziglang==0.14.1 \
+    && rm -rf /var/lib/apt/lists/*
+RUN rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl \
+    armv7-unknown-linux-musleabihf i686-unknown-linux-musl
+
 WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY src/ ./src/
+COPY internal/web/static/ ./internal/web/static/
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    case "$TARGETPLATFORM" in \
+      linux/amd64) target=x86_64-unknown-linux-musl ;; \
+      linux/arm64) target=aarch64-unknown-linux-musl ;; \
+      linux/arm/v7) target=armv7-unknown-linux-musleabihf ;; \
+      linux/386) target=i686-unknown-linux-musl ;; \
+      *) echo "Unsupported platform: $TARGETPLATFORM" >&2; exit 1 ;; \
+    esac && \
+    STP_VERSION="$VERSION" cargo zigbuild --release --locked --target "$target" && \
+    cp "target/$target/release/serial-tcp-proxy" /serial-tcp-proxy
 
-# Copy go mod files first for better caching
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy source code
-COPY cmd/ ./cmd/
-COPY internal/ ./internal/
-
-# Build binary
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags="-s -w -X main.Version=${VERSION}" \
-    -o /serial-tcp-proxy ./cmd/serial-tcp-proxy
-
-# Runtime stage
 FROM alpine:3.22
 
 RUN apk add --no-cache tzdata jq curl
