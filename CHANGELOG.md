@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.3.3] - 2026-11-01
 
 ### Security
 - **Cross-origin stream reads**: `/api/events` no longer sends `Access-Control-Allow-Origin: *`, and `/api/ws` accepts only a missing `Origin` or one whose host equals the request `Host`. Before this fix, a page on another origin could read live bus traffic when web auth was disabled. Home Assistant ingress still works because it forwards the browser `Host` and `Origin` unchanged (#11)
