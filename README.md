@@ -144,6 +144,7 @@ curl -u admin:secret http://localhost:18080/api/status
 
 # Inject packet
 curl -u admin:secret -X POST \
+  -H "Content-Type: application/json" \
   -d '{"target":"upstream","format":"hex","data":"f70e114101015e02"}' \
   http://localhost:18080/api/inject
 ```

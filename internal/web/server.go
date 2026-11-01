@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"mime"
 	"net/http"
 	"strings"
 	"sync"
@@ -234,6 +235,21 @@ func (s *Server) authHandler(next http.Handler) http.Handler {
 	})
 }
 
+// requireJSONPost rejects POST bodies that a cross-site page can send without a
+// CORS preflight (text/plain, form encodings), so other origins cannot inject packets.
+func requireJSONPost(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+			if err != nil || mediaType != "application/json" {
+				http.Error(w, "Unsupported Media Type", http.StatusUnsupportedMediaType)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
@@ -262,7 +278,7 @@ func (s *Server) Start() error {
 
 	s.httpServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.config.WebPort),
-		Handler: mux,
+		Handler: requireJSONPost(mux),
 	}
 
 	s.logger.Info("Web UI listening on http://localhost:%d", s.config.WebPort)
