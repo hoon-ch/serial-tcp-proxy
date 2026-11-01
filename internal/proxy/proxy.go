@@ -160,12 +160,13 @@ func (ps *Server) handleClient(cl *client.Client) {
 	defer ps.wg.Done()
 	defer ps.clients.Remove(cl.ID)
 
-	// Enable TCP keepalive to detect dead connections
-	// This replaces read deadline - connections stay open indefinitely
-	// but dead connections are detected via OS-level keepalive probes
+	// Keep idle connections open while detecting dead peers.
 	if tcpConn, ok := cl.Conn.(*net.TCPConn); ok {
 		_ = tcpConn.SetKeepAlive(true)
 		_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
+		if err := setUserTimeout(tcpConn, 30*time.Second); err != nil {
+			ps.logger.Warn("Failed to set TCP user timeout for %s: %v", cl.ID, err)
+		}
 	}
 
 	// Get buffer from pool for zero-copy
@@ -180,8 +181,6 @@ func (ps *Server) handleClient(cl *client.Client) {
 		default:
 		}
 
-		// No read deadline - client connections stay open indefinitely
-		// TCP keepalive will detect and close dead connections
 		n, err := cl.Conn.Read(buf)
 		if err != nil {
 			return

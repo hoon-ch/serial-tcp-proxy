@@ -25,6 +25,9 @@ A TCP proxy server that sits between Serial-to-TCP converters (e.g., Elfin-EW11)
 - **Web UI**: Real-time monitoring dashboard with packet inspector
 - **Health Check Endpoint**: Container orchestration support (Docker, Kubernetes)
 
+On Linux, client connections are closed when sent data remains unacknowledged
+for 30 seconds. Idle connections use TCP keepalive.
+
 ## Architecture
 
 ```
