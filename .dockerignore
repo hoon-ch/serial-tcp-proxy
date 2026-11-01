@@ -13,6 +13,7 @@ serial-tcp-proxy
 *.dll
 *.so
 *.dylib
+target/
 
 # Test files
 **/*_test.go
