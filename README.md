@@ -158,7 +158,7 @@ GET /api/health
 
 {
   "status": "healthy",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "uptime": 3600,
   "checks": {
     "upstream": {"status": "healthy", "connected": true},

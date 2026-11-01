@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.3.2] - 2026-11-01
 
 ### Security
 - **Cross-site packet injection**: The web server now rejects a `POST` request unless its `Content-Type` is `application/json` (HTTP 415)
