@@ -111,6 +111,7 @@ Monitor and analyze packets in real-time with HEX/ASCII view.
 - Filter presets with save/load
 - Virtual scrolling (10,000+ packets)
 - Auto-scroll with "Go to Latest" button
+- Optional frame splitting: enter `f7 @4 +7` for Kyungdong frames and press Enter. The rule specifies hex header bytes, a zero-based length-byte offset, and an adjustment added to that byte. Leave it empty to show raw TCP chunks. The setting persists in the browser and applies only to new inspector rows; Clear or changing the rule discards incomplete frames. Logs, forwarding, and injection remain unchanged.
 
 ![Packet Inspector](docs/images/packet-inspector.png)
 
