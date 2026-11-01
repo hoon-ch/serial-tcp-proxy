@@ -80,6 +80,8 @@
                     <div class="section-header">
                         <h2>Packet Inspector</h2>
                         <div class="actions">
+                            <input type="text" id="frame-rule" class="filter-input" aria-label="Frame splitting rule"
+                                placeholder="f7 @4 +7" title="Frame rule: hex header bytes, @length offset, +length adjustment. Empty disables framing.">
                             <button id="toggle-inject" class="btn btn-secondary">Inject Packet</button>
                             <button id="clear-packets" class="btn btn-secondary">Clear</button>
                             <button id="pause-packets" class="btn btn-secondary">Pause</button>
