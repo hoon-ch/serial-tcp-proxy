@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/hoon-ch/serial-tcp-proxy/internal/config"
 	"github.com/hoon-ch/serial-tcp-proxy/internal/logger"
 	"github.com/hoon-ch/serial-tcp-proxy/internal/proxy"
@@ -1464,6 +1465,78 @@ type mockFlusher struct {
 
 func (m *mockFlusher) Flush() {
 	m.flushed++
+}
+
+func TestWebSocketOrigin(t *testing.T) {
+	cfg := &config.Config{MaxClients: 10}
+	log := newTestLogger()
+	webServer := NewServer(cfg, proxy.NewServer(cfg, log), log)
+	server := httptest.NewServer(http.HandlerFunc(webServer.authMiddleware(webServer.handleWebSocket)))
+	defer server.Close()
+
+	for _, tc := range []struct {
+		name   string
+		origin string
+		status int
+	}{
+		{name: "cross origin", origin: "http://evil.example", status: http.StatusForbidden},
+		{name: "same origin", origin: server.URL, status: http.StatusSwitchingProtocols},
+		{name: "no origin", status: http.StatusSwitchingProtocols},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			header := http.Header{}
+			if tc.origin != "" {
+				header.Set("Origin", tc.origin)
+			}
+			conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/api/ws", header)
+			if conn != nil {
+				defer conn.Close()
+			}
+			if resp == nil {
+				t.Fatalf("No handshake response: %v", err)
+			}
+			if resp.Body != nil {
+				defer resp.Body.Close()
+			}
+			if resp.StatusCode != tc.status {
+				t.Errorf("Expected status %d, got %d (error: %v)", tc.status, resp.StatusCode, err)
+			}
+			if tc.status == http.StatusSwitchingProtocols && err != nil {
+				t.Errorf("Expected successful handshake: %v", err)
+			}
+			if tc.status == http.StatusForbidden && err == nil {
+				t.Error("Expected handshake to fail")
+			}
+		})
+	}
+}
+
+func TestEventsCrossOriginHeader(t *testing.T) {
+	cfg := &config.Config{MaxClients: 10}
+	log := newTestLogger()
+	webServer := NewServer(cfg, proxy.NewServer(cfg, log), log)
+	server := httptest.NewServer(http.HandlerFunc(webServer.authMiddleware(webServer.handleEvents)))
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/api/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", "http://evil.example")
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+	if values := resp.Header.Values("Access-Control-Allow-Origin"); len(values) != 0 {
+		t.Errorf("Expected no Access-Control-Allow-Origin header, got %q", values)
+	}
+	cancel()
 }
 
 func TestHandleEvents_SSE(t *testing.T) {
