@@ -28,12 +28,17 @@ jobs:
         id: version
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Releasing version: $VERSION"
 
       - name: Update version in config.yaml
         run: |
           sed -i "s/^version: .*/version: \"${{ steps.version.outputs.VERSION }}\"/" config.yaml
+
+      - name: Update Cargo package version
+        run: |
+          sed -i '/^\[package\]/,/^\[/{s/^version = ".*"/version = "${{ steps.version.outputs.VERSION }}"/;}' Cargo.toml
+          sed -i '/^name = "serial-tcp-proxy"$/{n;s/^version = ".*"/version = "${{ steps.version.outputs.VERSION }}"/;}' Cargo.lock
 
       - name: Update version in README.md
         run: |
@@ -72,38 +77,34 @@ jobs:
         with:
           ref: main
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: Run tests
-        run: go test -v ./...
+        run: cargo test --locked
 
   build-binaries:
     needs: [update-version, test]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
-          - goos: linux
-            goarch: amd64
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-musl
             suffix: linux-amd64
-          - goos: linux
-            goarch: arm64
+          - runner: ubuntu-latest
+            target: aarch64-unknown-linux-musl
             suffix: linux-arm64
-          - goos: linux
-            goarch: arm
-            goarm: 7
+          - runner: ubuntu-latest
+            target: armv7-unknown-linux-musleabihf
             suffix: linux-armv7
-          - goos: darwin
-            goarch: amd64
+          - runner: macos-latest
+            target: x86_64-apple-darwin
             suffix: darwin-amd64
-          - goos: darwin
-            goarch: arm64
+          - runner: macos-latest
+            target: aarch64-apple-darwin
             suffix: darwin-arm64
-          - goos: windows
-            goarch: amd64
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
             suffix: windows-amd64.exe
 
     steps:
@@ -112,21 +113,28 @@ jobs:
         with:
           ref: main
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          go-version: '1.25'
-
-      - name: Build binary
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          GOARM: ${{ matrix.goarm }}
-          CGO_ENABLED: 0
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Install zigbuild
+        if: runner.os == 'Linux'
         run: |
-          go build -ldflags="-s -w -X main.Version=v${{ needs.update-version.outputs.version }}" \
-            -o serial-tcp-proxy-${{ matrix.suffix }} \
-            ./cmd/serial-tcp-proxy
+          python3 -m pip install --user --break-system-packages cargo-zigbuild==0.20.1 ziglang==0.14.1
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Build binary
+        shell: bash
+        env:
+          STP_VERSION: ${{ needs.update-version.outputs.version }}
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            cargo zigbuild --release --locked --target "${{ matrix.target }}"
+          else
+            cargo build --release --locked --target "${{ matrix.target }}"
+          fi
+          extension=""
+          if [ "$RUNNER_OS" = Windows ]; then extension=".exe"; fi
+          cp "target/${{ matrix.target }}/release/serial-tcp-proxy${extension}" "serial-tcp-proxy-${{ matrix.suffix }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -198,7 +206,7 @@ jobs:
           sha256sum serial-tcp-proxy-* > checksums.txt
 
       - name: Upload Release Assets
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/serial-tcp-proxy-*
