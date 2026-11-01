@@ -66,9 +66,17 @@ impl State {
                 }
                 result => {
                     self.inner.lock().unwrap().state = "Disconnected";
+                    let error = match result {
+                        Ok(Err(error)) => error,
+                        Err(_) => std::io::Error::from(std::io::ErrorKind::TimedOut),
+                        Ok(Ok(_)) => unreachable!(),
+                    };
                     self.info(
                         "ERROR",
-                        &format!("Failed to connect to upstream: {result:?}"),
+                        &format!(
+                            "Failed to connect to upstream {}: {error}",
+                            self.config.upstream_addr()
+                        ),
                     );
                     sleep(Duration::from_secs(delay)).await;
                     delay = (delay * 2).min(30);
