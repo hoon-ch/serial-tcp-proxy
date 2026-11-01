@@ -189,6 +189,70 @@ func TestServer_MultipleClients(t *testing.T) {
 	}
 }
 
+func TestServer_StopClosesConnectedClients(t *testing.T) {
+	upstreamListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock upstream: %v", err)
+	}
+	defer upstreamListener.Close()
+	go func() {
+		conn, err := upstreamListener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_, _ = io.Copy(io.Discard, conn)
+	}()
+
+	cfg := &config.Config{
+		UpstreamHost: "127.0.0.1",
+		UpstreamPort: upstreamListener.Addr().(*net.TCPAddr).Port,
+		ListenPort:   0,
+		MaxClients:   10,
+	}
+	proxy := NewServer(cfg, newTestLogger())
+	if err := proxy.Start(); err != nil {
+		t.Fatalf("Failed to start proxy: %v", err)
+	}
+	stopped := false
+	defer func() {
+		if !stopped {
+			proxy.Stop()
+		}
+	}()
+
+	client, err := net.DialTimeout("tcp", proxy.listener.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatalf("Failed to connect client to proxy: %v", err)
+	}
+	defer client.Close()
+
+	deadline := time.Now().Add(time.Second)
+	for proxy.GetTCPClientCount() != 1 {
+		if time.Now().After(deadline) {
+			t.Fatal("Client was not registered")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	start := time.Now()
+	proxy.Stop()
+	elapsed := time.Since(start)
+	stopped = true
+	if elapsed >= time.Second {
+		t.Errorf("Stop took %v, want less than 1s", elapsed)
+	}
+
+	if err := client.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("Failed to set client read deadline: %v", err)
+	}
+	if _, err := client.Read(make([]byte, 1)); err == nil {
+		t.Error("Expected client connection to be closed")
+	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		t.Errorf("Client connection did not close: %v", err)
+	}
+}
+
 func TestServer_GetStatus(t *testing.T) {
 	cfg := &config.Config{
 		UpstreamHost: "192.168.1.100",
