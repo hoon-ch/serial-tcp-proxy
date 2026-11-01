@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Security
+- **Cross-site packet injection**: The web server now rejects a `POST` request unless its `Content-Type` is `application/json` (HTTP 415)
+  - Before this fix, a page on another origin could send a `text/plain` request to `/api/inject` without a CORS preflight and write bytes to the serial bus when web auth was disabled
+  - The web UI already sends JSON. Scripts that call the API with `curl -d` must add `-H "Content-Type: application/json"`
+
 ## [1.3.1] - 2025-11-30
 - Application logo changed
 
