@@ -12,13 +12,17 @@ impl State {
         for (id, addr, w) in clients {
             let result = timeout(Duration::from_millis(100), async {
                 w.lock().await.write_all(data).await
-            }).await;
+            })
+            .await;
             let error = match result {
                 Ok(Ok(())) => continue,
                 Ok(Err(error)) => error.to_string(),
                 Err(error) => error.to_string(),
             };
-            self.info("WARN", &format!("Failed to write to {addr} [{id}]: {error}"));
+            self.info(
+                "WARN",
+                &format!("Failed to write to {addr} [{id}]: {error}"),
+            );
             self.disconnect(&id);
         }
     }
