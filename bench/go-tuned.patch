@@ -1,0 +1,28 @@
+diff --git a/internal/logger/logger.go b/internal/logger/logger.go
+index 80b8bd4..d22bc1c 100644
+--- a/internal/logger/logger.go
++++ b/internal/logger/logger.go
+@@ -120,18 +120,14 @@ func (l *Logger) LogPacket(direction string, data []byte, source string) {
+ 	}
+ 
+ 	timestamp := time.Now().Format(time.RFC3339Nano)
+-	hexStr := hex.EncodeToString(data)
+-
+-	// Format hex with spaces
+-	var formattedHex string
+-	for i := 0; i < len(hexStr); i += 2 {
++	formatted := make([]byte, 0, len(data)*3)
++	for i, b := range data {
+ 		if i > 0 {
+-			formattedHex += " "
+-		}
+-		if i+2 <= len(hexStr) {
+-			formattedHex += hexStr[i : i+2]
++			formatted = append(formatted, ' ')
+ 		}
++		formatted = hex.AppendEncode(formatted, []byte{b})
+ 	}
++	formattedHex := string(formatted)
+ 
+ 	var line string
+ 	if source != "" {
