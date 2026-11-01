@@ -314,14 +314,15 @@ func (ps *Server) DisconnectClient(id string) bool {
 
 // InjectPacket injects a packet to the specified target (upstream or downstream)
 func (ps *Server) InjectPacket(target string, data []byte) error {
-	if target == "upstream" {
+	switch target {
+	case "upstream":
 		if !ps.upstream.IsConnected() {
 			return net.ErrClosed
 		}
 		// Log as if it came from a client (Client -> Upstream)
 		ps.logger.LogPacket("->UP", data, "INJECT")
 		return ps.upstream.Write(data)
-	} else if target == "downstream" {
+	case "downstream":
 		// Log as if it came from upstream (Upstream -> Client)
 		ps.logger.LogPacket("UP->", data, "INJECT")
 		ps.clients.Broadcast(data)
