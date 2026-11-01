@@ -941,6 +941,86 @@ func TestHandleInject_InvalidHex(t *testing.T) {
 	}
 }
 
+func TestRoutes_InjectRequiresJSON(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		contentType string
+		wantStatus  int
+		wantData    string
+	}{
+		{"plain text", "text/plain", http.StatusUnsupportedMediaType, ""},
+		{"JSON", "application/json", http.StatusOK, "\xde\xad\xbe\xef"},
+		{"JSON with charset", "application/json; charset=utf-8", http.StatusOK, "\xde\xad\xbe\xef"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer listener.Close()
+
+			cfg := &config.Config{
+				UpstreamHost: "127.0.0.1",
+				UpstreamPort: listener.Addr().(*net.TCPAddr).Port,
+				ListenPort:   0,
+				MaxClients:   10,
+				WebPort:      0,
+			}
+			log := newTestLogger()
+			p := proxy.NewServer(cfg, log)
+			if err := p.Start(); err != nil {
+				t.Fatal(err)
+			}
+			defer p.Stop()
+
+			if err := listener.(*net.TCPListener).SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			conn, err := listener.Accept()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			deadline := time.Now().Add(2 * time.Second)
+			for !p.IsUpstreamConnected() {
+				if time.Now().After(deadline) {
+					t.Fatal("upstream did not connect")
+				}
+				time.Sleep(time.Millisecond)
+			}
+
+			s := NewServer(cfg, p, log)
+			if err := s.Start(); err != nil {
+				t.Fatal(err)
+			}
+			defer s.Stop()
+			req := httptest.NewRequest(http.MethodPost, "/api/inject", strings.NewReader(`{"target":"upstream","format":"hex","data":"deadbeef"}`))
+			req.Header.Set("Content-Type", tc.contentType)
+			w := httptest.NewRecorder()
+			s.httpServer.Handler.ServeHTTP(w, req)
+			if w.Code != tc.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tc.wantStatus)
+			}
+
+			if err := conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+				t.Fatal(err)
+			}
+			buf := make([]byte, 4)
+			n, err := io.ReadFull(conn, buf)
+			if tc.wantData == "" {
+				if n != 0 {
+					t.Errorf("upstream received %x, want no bytes", buf[:n])
+				}
+				if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
+					t.Errorf("read error = %v, want timeout", err)
+				}
+			} else if err != nil || string(buf[:n]) != tc.wantData {
+				t.Errorf("upstream received %x, error %v, want %x", buf[:n], err, tc.wantData)
+			}
+		})
+	}
+}
+
 func TestHandleInject_HexWithSpaces(t *testing.T) {
 	// Start mock upstream
 	upstreamListener, err := net.Listen("tcp", "127.0.0.1:0")
