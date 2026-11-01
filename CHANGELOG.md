@@ -4,9 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **Go 1.25 language version**: `go.mod` now declares `go 1.25`, which turns on Go's container-aware `GOMAXPROCS` default. Under a CPU limit, the proxy now sizes its scheduler to the limit instead of the host's core count
+
 ### Fixed
 - **Packet log formatting cost**: `LogPacket` built the spaced hex string one byte at a time, so its cost grew with the square of the chunk size. It now builds the string in one pass. In a benchmark with the CPU capped at one core, this cut CPU by 4x at 5,000 records/s and raised maximum throughput from about 4 MB/s to over 500 MB/s
-
 ## [1.3.3] - 2026-11-01
 
 ### Security
