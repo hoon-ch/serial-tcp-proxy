@@ -1,11 +1,8 @@
-FROM --platform=$BUILDPLATFORM rust:1.90-bookworm AS builder
+FROM --platform=$BUILDPLATFORM messense/cargo-zigbuild:0.20.1 AS builder
 
 ARG TARGETPLATFORM
 ARG VERSION=dev
 
-RUN apt-get update && apt-get install -y --no-install-recommends python3-pip \
-    && pip3 install --break-system-packages cargo-zigbuild==0.20.1 ziglang==0.14.1 \
-    && rm -rf /var/lib/apt/lists/*
 RUN rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl \
     armv7-unknown-linux-musleabihf i686-unknown-linux-musl
 
