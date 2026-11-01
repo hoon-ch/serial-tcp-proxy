@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Security
+- **Cross-origin stream reads**: `/api/events` no longer sends `Access-Control-Allow-Origin: *`, and `/api/ws` accepts only a missing `Origin` or one whose host equals the request `Host`. Before this fix, a page on another origin could read live bus traffic when web auth was disabled. Home Assistant ingress still works because it forwards the browser `Host` and `Origin` unchanged (#11)
+
+### Added
+- **Inspector frame splitting**: Enter a rule such as `f7 @4 +7` (header bytes, length-byte offset, length adjustment) in the Packet Inspector to show one row per protocol frame instead of one row per TCP read. Logs, forwarding, and injection are unchanged (#12)
+
+### Fixed
+- **Dead clients**: On Linux, a client connection closes when sent data stays unacknowledged for 30 seconds. Before this fix, a client that vanished without closing its socket stayed registered for about 15 minutes (#13)
+
 ## [1.3.2] - 2026-11-01
 
 ### Security
