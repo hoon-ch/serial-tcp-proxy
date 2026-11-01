@@ -120,18 +120,14 @@ func (l *Logger) LogPacket(direction string, data []byte, source string) {
 	}
 
 	timestamp := time.Now().Format(time.RFC3339Nano)
-	hexStr := hex.EncodeToString(data)
-
-	// Format hex with spaces
-	var formattedHex string
-	for i := 0; i < len(hexStr); i += 2 {
+	formatted := make([]byte, 0, len(data)*3)
+	for i, b := range data {
 		if i > 0 {
-			formattedHex += " "
+			formatted = append(formatted, ' ')
 		}
-		if i+2 <= len(hexStr) {
-			formattedHex += hexStr[i : i+2]
-		}
+		formatted = hex.AppendEncode(formatted, []byte{b})
 	}
+	formattedHex := string(formatted)
 
 	var line string
 	if source != "" {
