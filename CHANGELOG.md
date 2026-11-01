@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.3.4] - 2026-11-01
 
 ### Changed
 - **Go 1.25 language version**: `go.mod` now declares `go 1.25`, which turns on Go's container-aware `GOMAXPROCS` default. Under a CPU limit, the proxy now sizes its scheduler to the limit instead of the host's core count

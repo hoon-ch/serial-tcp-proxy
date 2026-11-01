@@ -47,7 +47,7 @@ GET /api/health
 ```json
 {
   "status": "healthy",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "uptime": 3600,
   "checks": {
     "upstream": {
