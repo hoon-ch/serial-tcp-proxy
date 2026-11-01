@@ -68,7 +68,9 @@ def run_one(side, name):
     sh("docker", "run", "-d", "--name", "stpb-up", "--network", NET, "-v", f"{BENCH}:/bench:ro", TOOLS,
        "python3", "-u", "/bench/upstream.py", *sc["upstream"])
     t0 = time.monotonic()
-    sh("docker", "run", "-d", "--name", "stpb-proxy", "--network", NET, "--cpus", CPUS, "--memory", MEMORY,
+    env_file = BENCH / "bin" / side / "env"
+    extra = ["--env-file", str(env_file)] if env_file.exists() else []
+    sh("docker", "run", "-d", "--name", "stpb-proxy", "--network", NET, "--cpus", CPUS, "--memory", MEMORY, *extra,
        "-e", "UPSTREAM_HOST=stpb-up", "-e", "UPSTREAM_PORT=8899", "-e", "LISTEN_PORT=18899", "-e", "WEB_PORT=18080",
        "-e", "MAX_CLIENTS=20", "-e", "LOG_PACKETS=false", f"stp-proxy-{side}")
     if not wait_healthy():
@@ -76,7 +78,8 @@ def run_one(side, name):
     startup_s = time.monotonic() - t0
     load = None
     if sc["tcp"] or sc["ws"]:
-        load = subprocess.Popen(["docker", "run", "--name", "stpb-load", "--network", NET, "-v", f"{BENCH}:/bench:ro", TOOLS,
+        load = subprocess.Popen(["docker", "run", "--name", "stpb-load", "--network", NET, "--pid", "container:stpb-proxy",
+                                 "-v", f"{BENCH}:/bench:ro", TOOLS,
                                  "python3", "/bench/loadgen.py", "stpb-proxy", "18899", "18080", str(sc["tcp"]), str(sc["ws"]),
                                  str(sc["seconds"]), str(sc["warmup"]), sc["parse"]], stdout=subprocess.PIPE, text=True)
     time.sleep(sc["warmup"] + 0.5)
@@ -95,9 +98,11 @@ def run_one(side, name):
     if load:
         out, _ = load.communicate(timeout=sc["seconds"] + 60)
         result.update(json.loads(out.strip().splitlines()[-1]))
-        result["tcp_mb_s"] = round(result["tcp_bytes"] / sc["seconds"] / 1e6, 3)
+        # loadgen shares the proxy's PID namespace and reads its CPU over the same window it counts bytes in.
+        result["cpu_pct"] = round(100 * result["proxy_cpu_s"] / result["window_s"], 2)
+        result["tcp_mb_s"] = round(result["tcp_bytes"] / result["window_s"] / 1e6, 3)
         if result["tcp_mb_s"] > 1:
-            result["cpu_s_per_gb"] = round(result["cpu_pct"] / 100 / result["tcp_mb_s"] * 1000, 3)
+            result["cpu_s_per_gb"] = round(result["proxy_cpu_s"] / (result["tcp_bytes"] / 1e9), 3)
     proxy_logs = sh("docker", "logs", "stpb-proxy", check=False)
     result["proxy_warnings"] = sum(1 for l in proxy_logs.splitlines() if "WARN" in l or "ERROR" in l)
     docker_rm("stpb-up", "stpb-proxy", "stpb-load")
