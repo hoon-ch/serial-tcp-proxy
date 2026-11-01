@@ -257,13 +257,15 @@ readinessProbe:
 ## 빌드
 
 ```bash
-go build -o serial-tcp-proxy ./cmd/serial-tcp-proxy
+cargo build --release
+docker build -t serial-tcp-proxy .
 ```
 
 ## 테스트
 
 ```bash
-go test -v ./...
+cargo test
+bun tests/contract/contract.mjs --bin target/release/serial-tcp-proxy
 ```
 
 ## 호환 장치
