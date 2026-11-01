@@ -1,0 +1,31 @@
+== go-tuned
+untraced 10 s: user_ticks=20 sys_ticks=34 (100 ticks = 1 CPU-second)
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 73.02    3.275247         248     13171       205 futex
+ 10.36    0.464505          77      5975           nanosleep
+  9.19    0.412098          45      9057         1 epoll_pwait
+  6.22    0.278944           6     43602           write
+  1.14    0.051203           5      8558      4115 read
+  0.05    0.002165          18       119           sched_yield
+  0.01    0.000552           5        97           madvise
+  0.00    0.000216          15        14           getpid
+  0.00    0.000121           8        14           tgkill
+  0.00    0.000105          10        10        10 accept4
+  0.00    0.000056           4        14         1 rt_sigreturn
+  0.00    0.000036          36         1           restart_syscall
+== rs-tuned
+untraced 10 s: user_ticks=27 sys_ticks=52 (100 ticks = 1 CPU-second)
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 80.90    0.581987          15     37450           sendto
+  9.01    0.064805          19      3405           recvfrom
+  6.94    0.049900          14      3530           epoll_pwait
+  1.54    0.011075          12       879           munmap
+  1.52    0.010963          12       888           mmap
+  0.06    0.000414          13        30        30 openat
+  0.02    0.000167          16        10        10 newfstatat
+  0.01    0.000060           6        10        10 readlinkat
+  0.00    0.000029           5         5           write
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.719400          15     46207        50 total

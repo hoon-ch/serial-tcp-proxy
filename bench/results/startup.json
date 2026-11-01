@@ -1,0 +1,37 @@
+{
+ "bin/go/server": {
+  "median_ms": 8.08,
+  "min_ms": 2.19,
+  "max_ms": 20.05,
+  "runs": 15,
+  "sigterm_hangs": 0
+ },
+ "bin/go-tuned/server": {
+  "median_ms": 10.33,
+  "min_ms": 2.11,
+  "max_ms": 231.71,
+  "runs": 15,
+  "sigterm_hangs": 0
+ },
+ "bin/rs/server": {
+  "median_ms": 2.4,
+  "min_ms": 0.65,
+  "max_ms": 8.27,
+  "runs": 15,
+  "sigterm_hangs": 0
+ },
+ "bin/rs-tuned/server": {
+  "median_ms": 2.99,
+  "min_ms": 0.9,
+  "max_ms": 11.61,
+  "runs": 15,
+  "sigterm_hangs": 0
+ },
+ "bin/rs-tuned-mi/server": {
+  "median_ms": 5.49,
+  "min_ms": 1.05,
+  "max_ms": 18.03,
+  "runs": 15,
+  "sigterm_hangs": 0
+ }
+}
