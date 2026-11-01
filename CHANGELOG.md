@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.0.0] - 2026-11-01
 
 ### Changed
 - The add-on server is now written in Rust. Configuration, ports, API, web UI, and release asset names remain the same.
