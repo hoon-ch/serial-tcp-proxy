@@ -8,6 +8,7 @@ import {
     addPreset
 } from './filter.js';
 import { VirtualTable } from './virtual-table.js';
+import { parseRule, createFrameRegistry } from './framing.js';
 
 export const packets = [];
 export const selectedPackets = [];
@@ -15,6 +16,7 @@ export const hiddenColumns = new Set();
 
 const packetList = document.getElementById('packet-list');
 const filterInput = document.getElementById('packet-filter');
+const frameRuleInput = document.getElementById('frame-rule');
 const diffBtn = document.getElementById('diff-packets');
 const sortHeaders = document.querySelectorAll('.packet-table th.sortable');
 const container = document.getElementById('packet-table-container');
@@ -40,6 +42,27 @@ const customPresetsGroup = document.getElementById('custom-presets');
 let currentSort = { field: null, direction: 'asc' };
 let autoScrollEnabled = true;
 let missedPackets = 0;
+let frameRule = null;
+const frameRegistry = createFrameRegistry();
+const frameRuleTitle = frameRuleInput.title;
+
+function applyFrameRule() {
+    try {
+        const nextRule = parseRule(frameRuleInput.value);
+        if (JSON.stringify(nextRule) !== JSON.stringify(frameRule)) {
+            frameRule = nextRule;
+            frameRegistry.setRule(frameRule);
+        }
+        localStorage.setItem('frame-rule', frameRuleInput.value.trim());
+        frameRuleInput.classList.remove('invalid');
+        frameRuleInput.removeAttribute('aria-invalid');
+        frameRuleInput.title = frameRuleTitle;
+    } catch (error) {
+        frameRuleInput.classList.add('invalid');
+        frameRuleInput.setAttribute('aria-invalid', 'true');
+        frameRuleInput.title = error.message;
+    }
+}
 
 // Virtual table instance
 let virtualTable = null;
@@ -82,6 +105,20 @@ export function addPacketEntry(logLine) {
         return;
     }
 
+    if (!frameRule) {
+        addPacketRow(time, direction, length, hexData);
+        return;
+    }
+
+    const source = logLine.match(/ from (\S+)/)?.[1] || '';
+    const bytes = hexData.split(' ').map(byte => parseInt(byte, 16));
+    for (const frame of frameRegistry.split(JSON.stringify([direction, source]), bytes)) {
+        const hex = frame.map(byte => byte.toString(16).padStart(2, '0')).join(' ');
+        addPacketRow(time, direction, String(frame.length), hex);
+    }
+}
+
+function addPacketRow(time, direction, length, hexData) {
     // Format Hex
     let formattedHex = '';
     const hexBytes = hexData.split(' ');
@@ -330,6 +367,7 @@ export function togglePacketSelection(row, packet) {
 }
 
 export function clearPackets() {
+    frameRegistry.reset();
     packets.length = 0;
     selectedPackets.length = 0;
     processedPackets = [];
@@ -386,6 +424,12 @@ export function initPackets() {
 
     // Load custom presets on init
     loadCustomPresets();
+    frameRuleInput.value = localStorage.getItem('frame-rule') || '';
+    applyFrameRule();
+    frameRuleInput.addEventListener('change', applyFrameRule);
+    frameRuleInput.addEventListener('keydown', event => {
+        if (event.key === 'Enter') applyFrameRule();
+    });
 
     // Sorting Event Listeners
     sortHeaders.forEach(header => {
