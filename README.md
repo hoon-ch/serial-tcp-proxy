@@ -181,17 +181,15 @@ GET /api/health
 ## Building
 
 ```bash
-go build -o serial-tcp-proxy ./cmd/serial-tcp-proxy
+cargo build --release
+docker build -t serial-tcp-proxy .
 ```
 
 ## Testing
 
 ```bash
-# Run all tests
-go test -v ./...
-
-# Run with coverage
-go test -cover ./...
+cargo test
+bun tests/contract/contract.mjs --bin target/release/serial-tcp-proxy
 ```
 
 See [Contributing Guide](docs/CONTRIBUTING.md) for development setup.

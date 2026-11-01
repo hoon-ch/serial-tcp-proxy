@@ -6,7 +6,9 @@ Thank you for your interest in contributing to Serial TCP Proxy!
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Rust toolchain with Cargo and Clippy
+- Bun for contract tests
+- Docker for image builds
 - Git
 
 ### Clone and Build
@@ -14,7 +16,7 @@ Thank you for your interest in contributing to Serial TCP Proxy!
 ```bash
 git clone https://github.com/hoon-ch/serial-tcp-proxy.git
 cd serial-tcp-proxy
-go build -o serial-tcp-proxy ./cmd/serial-tcp-proxy
+cargo build --release
 ```
 
 ### Running Locally
@@ -25,66 +27,43 @@ export UPSTREAM_PORT=8899
 export LISTEN_PORT=18899
 export WEB_PORT=18080
 
-./serial-tcp-proxy
+./target/release/serial-tcp-proxy
 ```
 
 ## Testing
 
-### Run All Tests
+Run the unit tests and contract tests:
 
 ```bash
-go test -v ./...
+cargo test
+cargo build --release
+bun tests/contract/contract.mjs --bin target/release/serial-tcp-proxy
 ```
 
-### Run Tests with Coverage
+Build the Docker image:
 
 ```bash
-go test -cover ./...
+docker build -t serial-tcp-proxy .
 ```
-
-### Generate Coverage Report
-
-```bash
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out -o coverage.html
-open coverage.html  # macOS
-```
-
-### Test Coverage Goals
-
-| Package | Target | Current |
-|---------|--------|---------|
-| internal/web | 80% | 92.4% |
-| internal/client | 80% | 93.9% |
-| internal/upstream | 80% | 86.0% |
-| internal/logger | 80% | 83.3% |
-| internal/config | 70% | 72.7% |
-| internal/proxy | 70% | 70.8% |
 
 ## Project Structure
 
 ```
 serial-tcp-proxy/
-├── cmd/
-│   └── serial-tcp-proxy/    # Main entry point
-├── internal/
-│   ├── client/              # Client connection management
-│   ├── config/              # Configuration handling
-│   ├── logger/              # Logging utilities
-│   ├── proxy/               # Core proxy logic
-│   ├── upstream/            # Upstream connection management
-│   └── web/                 # Web UI server
-│       └── static/          # Static web assets
+├── src/                     # Rust server and unit tests
+│   ├── proxy/               # Proxy and upstream connections
+│   └── web/                 # Web server
+├── web/static/              # Embedded web assets
+├── tests/contract/          # Contract tests
 ├── docs/                    # Documentation
-├── addons/                  # Home Assistant Add-on config
+├── config.yaml              # Home Assistant add-on configuration
 └── .github/workflows/       # CI/CD pipelines
 ```
 
 ## Code Style
 
-- Follow standard Go conventions
-- Use `gofmt` for formatting
-- Run `go vet` before committing
+- Run `cargo fmt --check` before committing
+- Run `cargo clippy --all-targets -- -D warnings` before committing
 - Keep functions focused and small
 - Write descriptive commit messages
 
@@ -230,7 +209,7 @@ When making changes, add an `[Unreleased]` section at the top of `CHANGELOG.md`:
 
 When reporting issues, please include:
 
-- Go version (`go version`)
+- Rust version (`rustc --version`)
 - OS and architecture
 - Steps to reproduce
 - Expected vs actual behavior
