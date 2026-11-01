@@ -7,15 +7,6 @@ serial-tcp-proxy-*
 *.so
 *.dylib
 
-# Test binary
-*.test
-
-# Output of go coverage tool
-*.out
-coverage.html
-
-# Go workspace file
-go.work
 
 # IDE
 .idea/
