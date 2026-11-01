@@ -226,9 +226,13 @@ async fn proxy_forwarding_reconnect_limit_and_shutdown() {
         .unwrap();
     let mut a = TcpStream::connect(client_addr).await.unwrap();
     let mut b = TcpStream::connect(client_addr).await.unwrap();
-    while state.clients()["tcp_count"] != 2 {
-        tokio::task::yield_now().await;
-    }
+    timeout(Duration::from_secs(1), async {
+        while state.clients()["tcp_count"] != 2 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
     let mut extra = TcpStream::connect(client_addr).await.unwrap();
     let mut buf = [0u8; 4];
     assert_eq!(
