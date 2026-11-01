@@ -12,7 +12,7 @@ RUN rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl \
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY src/ ./src/
-COPY internal/web/static/ ./internal/web/static/
+COPY web/static/ ./web/static/
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
     case "$TARGETPLATFORM" in \
