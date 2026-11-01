@@ -1,6 +1,6 @@
 use super::*;
 
-static ASSETS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/internal/web/static");
+static ASSETS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/web/static");
 pub(super) fn asset(uri: &Uri) -> Response {
     let path = uri.path();
     let path = if path == "/" {
