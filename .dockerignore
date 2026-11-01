@@ -15,11 +15,6 @@ serial-tcp-proxy
 *.dylib
 target/
 
-# Test files
-**/*_test.go
-*.test
-*.out
-coverage.html
 
 # IDE
 .idea/
