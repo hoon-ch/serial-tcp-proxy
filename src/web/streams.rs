@@ -63,6 +63,9 @@ pub(super) async fn events(AxumState(s): AxumState<Arc<State>>, headers: HeaderM
         "no-cache, no-store, must-revalidate".parse().unwrap(),
     );
     r.headers_mut()
+        .insert("pragma", "no-cache".parse().unwrap());
+    r.headers_mut().insert("expires", "0".parse().unwrap());
+    r.headers_mut()
         .insert("x-accel-buffering", "no".parse().unwrap());
     r.headers_mut()
         .insert("x-content-type-options", "nosniff".parse().unwrap());
