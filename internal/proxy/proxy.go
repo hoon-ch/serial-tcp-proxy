@@ -94,7 +94,8 @@ func (ps *Server) Stop() {
 	}
 	ps.listenerMu.Unlock()
 
-	// Give existing clients time to finish (max 5 seconds)
+	ps.clients.CloseAll()
+
 	done := make(chan struct{})
 	go func() {
 		ps.wg.Wait()
@@ -106,9 +107,6 @@ func (ps *Server) Stop() {
 	case <-time.After(5 * time.Second):
 		ps.logger.Warn("Timeout waiting for clients, forcing shutdown")
 	}
-
-	// Close all client connections
-	ps.clients.CloseAll()
 
 	// Stop upstream connection
 	ps.upstream.Stop()

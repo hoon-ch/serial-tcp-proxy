@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
   - Before this fix, a page on another origin could send a `text/plain` request to `/api/inject` without a CORS preflight and write bytes to the serial bus when web auth was disabled
   - The web UI already sends JSON. Scripts that call the API with `curl -d` must add `-H "Content-Type: application/json"`
 
+### Fixed
+- **Slow shutdown**: The proxy closes client connections before it waits for client goroutines. A restart with a connected client no longer takes 5 seconds or logs `Timeout waiting for clients, forcing shutdown`
+
 ## [1.3.1] - 2025-11-30
 - Application logo changed
 
