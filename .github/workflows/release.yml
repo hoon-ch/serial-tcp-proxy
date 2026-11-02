@@ -86,7 +86,7 @@ jobs:
     needs: [update-version, test]
     runs-on: ubuntu-latest
     # Same toolchain image as the Dockerfile builder, so release binaries and add-on images match.
-    container: messense/cargo-zigbuild:0.24.0
+    container: messense/cargo-zigbuild:0.24.0@sha256:eb5578cfc06e070a09deb7b5852474bd128a4e561f9f123261b5ed2405e478b1
     strategy:
       matrix:
         include:

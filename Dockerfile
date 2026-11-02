@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM messense/cargo-zigbuild:0.24.0 AS builder
+FROM --platform=$BUILDPLATFORM messense/cargo-zigbuild:0.24.0@sha256:eb5578cfc06e070a09deb7b5852474bd128a4e561f9f123261b5ed2405e478b1 AS builder
 
 ARG TARGETPLATFORM
 ARG VERSION=dev
