@@ -67,17 +67,24 @@ function renderClients(data) {
     // Add client rows
     sortedClients.forEach(client => {
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td class="client-id">${client.id}</td>
-            <td class="client-addr">${client.addr}</td>
-            <td><span class="client-type ${client.type}">${client.type}</span></td>
-            <td class="client-time">${formatConnectedTime(client.connected_at)}</td>
-            <td>
-                <button class="btn-disconnect" data-client-id="${client.id}">
-                    Disconnect
-                </button>
-            </td>
-        `;
+        const id = row.insertCell();
+        id.className = 'client-id';
+        id.textContent = client.id;
+        const addr = row.insertCell();
+        addr.className = 'client-addr';
+        addr.textContent = client.addr;
+        const type = document.createElement('span');
+        type.className = `client-type ${client.type}`;
+        type.textContent = client.type;
+        row.insertCell().appendChild(type);
+        const time = row.insertCell();
+        time.className = 'client-time';
+        time.textContent = formatConnectedTime(client.connected_at);
+        const button = document.createElement('button');
+        button.className = 'btn-disconnect';
+        button.dataset.clientId = client.id;
+        button.textContent = 'Disconnect';
+        row.insertCell().appendChild(button);
         clientsList.appendChild(row);
     });
 

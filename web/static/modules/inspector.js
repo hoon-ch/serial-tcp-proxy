@@ -78,8 +78,8 @@ export function renderDiff(p1, p2) {
     const containerA = document.getElementById('diff-packet-a');
     const containerB = document.getElementById('diff-packet-b');
 
-    let htmlA = '';
-    let htmlB = '';
+    containerA.replaceChildren();
+    containerB.replaceChildren();
 
     const maxLength = Math.max(hex1.length, hex2.length);
 
@@ -90,10 +90,17 @@ export function renderDiff(p1, p2) {
         const isDiff = b1 !== b2;
         const diffClass = isDiff ? 'diff' : '';
 
-        if (b1) htmlA += `<span class="diff-byte ${diffClass}">${b1}</span> `;
-        if (b2) htmlB += `<span class="diff-byte ${diffClass}">${b2}</span> `;
+        if (b1) {
+            const span = document.createElement('span');
+            span.className = `diff-byte ${diffClass}`;
+            span.textContent = b1;
+            containerA.append(span, document.createTextNode(' '));
+        }
+        if (b2) {
+            const span = document.createElement('span');
+            span.className = `diff-byte ${diffClass}`;
+            span.textContent = b2;
+            containerB.append(span, document.createTextNode(' '));
+        }
     }
-
-    containerA.innerHTML = htmlA;
-    containerB.innerHTML = htmlB;
 }

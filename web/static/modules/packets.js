@@ -73,48 +73,18 @@ let processedPackets = [];
 // Maximum packets to store (increased from 1000 due to virtual scrolling)
 const MAX_PACKETS = 10000;
 
-export function addPacketEntry(logLine) {
-    // Only process packet logs
-    if (!logLine.includes('[PKT]')) return;
-
-    // Example: 2024-01-01T... [PKT] [UP->] f7 0e ... (8 bytes)
-    const parts = logLine.split(' ');
-    const time = formatTime(parts[0]);
-
-    let direction = '';
-    let hexData = '';
-    let length = '';
-
-    if (logLine.includes('[UP->]')) {
-        direction = 'UP -> Client';
-        const dirIndex = logLine.indexOf('[UP->]');
-        const bytesIndex = logLine.lastIndexOf('(');
-        if (dirIndex !== -1 && bytesIndex !== -1) {
-            hexData = logLine.substring(dirIndex + 6, bytesIndex).trim();
-            length = logLine.substring(bytesIndex + 1, logLine.indexOf(' bytes'));
-        }
-    } else if (logLine.includes('[->UP]')) {
-        direction = 'Client -> UP';
-        const dirIndex = logLine.indexOf('[->UP]');
-        const bytesIndex = logLine.lastIndexOf('(');
-        if (dirIndex !== -1 && bytesIndex !== -1) {
-            hexData = logLine.substring(dirIndex + 6, bytesIndex).trim();
-            length = logLine.substring(bytesIndex + 1, logLine.indexOf(' bytes'));
-        }
-    } else {
-        return;
-    }
+export function addPacketEntry(packet) {
+    const time = formatTime(packet.time);
+    const direction = packet.direction === 'up' ? 'UP -> Client' : 'Client -> UP';
+    const toHex = bytes => bytes.map(byte => byte.toString(16).padStart(2, '0')).join(' ');
 
     if (!frameRule) {
-        addPacketRow(time, direction, length, hexData);
+        addPacketRow(time, direction, String(packet.bytes.length), toHex(packet.bytes));
         return;
     }
 
-    const source = logLine.match(/ from (\S+)/)?.[1] || '';
-    const bytes = hexData.split(' ').map(byte => parseInt(byte, 16));
-    for (const frame of frameRegistry.split(JSON.stringify([direction, source]), bytes)) {
-        const hex = frame.map(byte => byte.toString(16).padStart(2, '0')).join(' ');
-        addPacketRow(time, direction, String(frame.length), hex);
+    for (const frame of frameRegistry.split(JSON.stringify([direction, packet.source || '']), packet.bytes)) {
+        addPacketRow(time, direction, String(frame.length), toHex(frame));
     }
 }
 
@@ -328,13 +298,20 @@ function renderTableRow(row, item, index) {
         hexHtml = generateHighlightedHex(p.hexRaw, matchPositions);
     }
 
-    row.innerHTML = `
-        <td>${p.time}</td>
-        <td class="direction ${p.direction.includes('UP ->') ? 'up' : 'down'}">${p.direction}</td>
-        <td>${p.length}</td>
-        <td class="hex">${hexHtml}</td>
-        <td class="ascii">${p.ascii}</td>
-    `;
+    row.replaceChildren();
+    const timeCell = row.insertCell();
+    timeCell.textContent = p.time;
+    const directionCell = row.insertCell();
+    directionCell.className = `direction ${p.direction.includes('UP ->') ? 'up' : 'down'}`;
+    directionCell.textContent = p.direction;
+    const lengthCell = row.insertCell();
+    lengthCell.textContent = p.length;
+    const hexCell = row.insertCell();
+    hexCell.className = 'hex';
+    hexCell.innerHTML = hexHtml;
+    const asciiCell = row.insertCell();
+    asciiCell.className = 'ascii';
+    asciiCell.textContent = p.ascii;
 
     applyColumnVisibility(row);
 }
