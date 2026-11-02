@@ -195,7 +195,7 @@ Home Assistant Add-on으로 실행 시, Ingress를 통해 사이드바 패널에
 ```json
 {
   "status": "healthy|degraded|unhealthy",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "uptime": 3600,
   "checks": {
     "upstream": {

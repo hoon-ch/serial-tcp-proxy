@@ -162,7 +162,7 @@ GET /api/health
 
 {
   "status": "healthy",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "uptime": 3600,
   "checks": {
     "upstream": {"status": "healthy", "connected": true},
