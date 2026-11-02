@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.0.3] - 2026-11-02
 
 ### Fixed
 - **Home Assistant panel**: Fixed a 404 when web authentication is enabled.
