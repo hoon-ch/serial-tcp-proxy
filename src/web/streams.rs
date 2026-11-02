@@ -99,11 +99,7 @@ pub(super) async fn websocket(
         Ok(upgrade) => upgrade.max_message_size(512),
         Err(error) => return error.into_response(),
     };
-    let addr = parts
-        .extensions
-        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
-        .map(|address| address.0.to_string())
-        .unwrap_or_default();
+    let addr = caller.addr();
     let Some((id, web_id, logs, mut rx, mut cancel)) = s.subscribe(true, addr) else {
         return response(StatusCode::SERVICE_UNAVAILABLE, "Max clients reached\n");
     };
