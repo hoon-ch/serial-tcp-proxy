@@ -28,6 +28,8 @@ impl State {
     }
     pub async fn run_listener(self: Arc<Self>, listener: TcpListener) {
         while let Ok((stream, addr)) = listener.accept().await {
+            let mut addr = addr;
+            addr.set_ip(addr.ip().to_canonical());
             let mut g = self.inner.lock().unwrap();
             if g.clients.len() + g.web.len() + g.sse >= self.config.max_clients as usize {
                 drop(g);

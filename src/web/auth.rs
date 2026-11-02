@@ -18,7 +18,11 @@ impl<S: Send + Sync> FromRequestParts<S> for Caller {
             axum::extract::ConnectInfo::<SocketAddr>::from_request_parts(parts, state)
                 .await
                 .ok()
-                .map(|info| info.0),
+                .map(|info| {
+                    let mut addr = info.0;
+                    addr.set_ip(addr.ip().to_canonical());
+                    addr
+                }),
         ))
     }
 }
@@ -26,7 +30,11 @@ impl<S: Send + Sync> FromRequestParts<S> for Caller {
 impl Caller {
     fn is_ingress(&self) -> bool {
         self.0
-            .is_some_and(|address| address.ip().to_canonical() == SUPERVISOR_INGRESS_IP)
+            .is_some_and(|address| address.ip() == SUPERVISOR_INGRESS_IP)
+    }
+
+    pub(super) fn addr(&self) -> String {
+        self.0.map(|addr| addr.to_string()).unwrap_or_default()
     }
 }
 
