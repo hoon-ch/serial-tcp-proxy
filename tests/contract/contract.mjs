@@ -75,7 +75,7 @@ async function mode(auth) {
       const root = await request('/'); assert.equal(root.status, 200); assert.match(root.headers.get('content-type'), /^text\/html/); assert.match(await root.text(), /<html/i);
       const script = await request('/modules/packets.js'); assert.equal(script.status, 200); assert.match(script.headers.get('content-type'), /^(text|application)\/javascript/); assert.ok((await script.text()).length > 0);
       const login = await fetch(base + '/login.html'); assert.equal(login.status, 200); assert.match(login.headers.get('content-type'), /^text\/html/);
-      if (auth) { const redirect = await fetch(base + '/', { redirect: 'manual' }); assert.equal(redirect.status, 302); assert.equal(redirect.headers.get('location'), '/login.html'); }
+      if (auth) { const redirect = await fetch(base + '/', { redirect: 'manual' }); assert.equal(redirect.status, 302); assert.equal(redirect.headers.get('location'), 'login.html'); }
     });
     await check(`${label}: health JSON`, async () => {
       const x = await json(await fetch(base + '/api/health')); shape(x, { status: 'string', version: 'string', uptime: 'number', checks: 'object', timestamp: 'string' }); assert.equal(x.status, 'healthy');

@@ -1,5 +1,35 @@
 use super::*;
 
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+// Supervisor has already authenticated requests forwarded through ingress.
+const SUPERVISOR_INGRESS_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(172, 30, 32, 2));
+
+pub(super) struct Caller(Option<SocketAddr>);
+
+impl<S: Send + Sync> FromRequestParts<S> for Caller {
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(Self(
+            axum::extract::ConnectInfo::<SocketAddr>::from_request_parts(parts, state)
+                .await
+                .ok()
+                .map(|info| info.0),
+        ))
+    }
+}
+
+impl Caller {
+    fn is_ingress(&self) -> bool {
+        self.0
+            .is_some_and(|address| address.ip().to_canonical() == SUPERVISOR_INGRESS_IP)
+    }
+}
+
 pub(super) fn header<'a>(headers: &'a HeaderMap, name: &str) -> &'a str {
     headers
         .get(name)
@@ -13,9 +43,17 @@ pub(super) fn cookie(headers: &HeaderMap) -> &str {
         .find_map(|p| p.strip_prefix("session_token="))
         .unwrap_or("")
 }
-pub(super) fn authenticated(headers: &HeaderMap, s: &State) -> bool {
-    if !s.config.web_auth_enabled || s.session_valid(cookie(headers)) {
+pub(super) fn authenticated(
+    headers: &HeaderMap,
+    s: &State,
+    caller: &Caller,
+    allow_basic: bool,
+) -> bool {
+    if !s.config.web_auth_enabled || caller.is_ingress() || s.session_valid(cookie(headers)) {
         return true;
+    }
+    if !allow_basic {
+        return false;
     }
     let Some(raw) = header(headers, "authorization").strip_prefix("Basic ") else {
         return false;

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **Home Assistant panel**: Fixed a 404 when web authentication is enabled.
+
+### Changed
+- Requests through Home Assistant ingress no longer require the add-on login. Direct access still requires login when web authentication is enabled.
+
 ## [2.0.2] - 2026-11-02
 
 ### Fixed
