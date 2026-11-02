@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.0.1] - 2026-11-02
 
 ### Fixed
 - **Release binaries**: The v2.0.0 release has no binary assets because the linux arm64 link failed. Linux binaries now build in the same cargo-zigbuild 0.24.0 image as the add-on images
