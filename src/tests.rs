@@ -331,6 +331,26 @@ async fn disconnect_frees_websocket_client_stuck_in_log_replay() {
 }
 
 #[tokio::test]
+async fn ipv4_client_address_is_readable_on_dual_stack_listener() {
+    let listener = TcpListener::bind("[::]:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let state = State::new(config());
+    let listener_task = tokio::spawn(state.clone().run_listener(listener));
+    let _client = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    timeout(Duration::from_secs(1), async {
+        while state.clients()["tcp_count"] != 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let clients = state.clients();
+    let addr = clients["clients"][0]["addr"].as_str().unwrap();
+    assert!(addr.starts_with("127.0.0.1:"), "address was {addr}");
+    listener_task.abort();
+}
+
+#[tokio::test]
 async fn proxy_forwarding_reconnect_limit_and_shutdown() {
     let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let clients = TcpListener::bind("127.0.0.1:0").await.unwrap();
