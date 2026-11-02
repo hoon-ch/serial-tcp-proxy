@@ -82,21 +82,46 @@ jobs:
       - name: Run tests
         run: cargo test --locked
 
-  build-binaries:
+  build-linux-binaries:
+    needs: [update-version, test]
+    runs-on: ubuntu-latest
+    # Same toolchain image as the Dockerfile builder, so release binaries and add-on images match.
+    container: messense/cargo-zigbuild:0.24.0
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            suffix: linux-amd64
+          - target: aarch64-unknown-linux-musl
+            suffix: linux-arm64
+          - target: armv7-unknown-linux-musleabihf
+            suffix: linux-armv7
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Build binary
+        env:
+          STP_VERSION: ${{ needs.update-version.outputs.version }}
+        run: |
+          rustup target add "${{ matrix.target }}"
+          cargo zigbuild --release --locked --target "${{ matrix.target }}"
+          cp "target/${{ matrix.target }}/release/serial-tcp-proxy" "serial-tcp-proxy-${{ matrix.suffix }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.suffix }}
+          path: serial-tcp-proxy-${{ matrix.suffix }}
+
+  build-native-binaries:
     needs: [update-version, test]
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
-          - runner: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            suffix: linux-amd64
-          - runner: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            suffix: linux-arm64
-          - runner: ubuntu-latest
-            target: armv7-unknown-linux-musleabihf
-            suffix: linux-armv7
           - runner: macos-latest
             target: x86_64-apple-darwin
             suffix: darwin-amd64
@@ -106,7 +131,6 @@ jobs:
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
             suffix: windows-amd64.exe
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -117,21 +141,12 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - name: Install zigbuild
-        if: runner.os == 'Linux'
-        run: |
-          python3 -m pip install --user --break-system-packages cargo-zigbuild==0.20.1 ziglang==0.14.1
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Build binary
         shell: bash
         env:
           STP_VERSION: ${{ needs.update-version.outputs.version }}
         run: |
-          if [ "$RUNNER_OS" = Linux ]; then
-            cargo zigbuild --release --locked --target "${{ matrix.target }}"
-          else
-            cargo build --release --locked --target "${{ matrix.target }}"
-          fi
+          cargo build --release --locked --target "${{ matrix.target }}"
           extension=""
           if [ "$RUNNER_OS" = Windows ]; then extension=".exe"; fi
           cp "target/${{ matrix.target }}/release/serial-tcp-proxy${extension}" "serial-tcp-proxy-${{ matrix.suffix }}"
@@ -190,7 +205,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   upload-release-assets:
-    needs: [update-version, build-binaries, build-docker]
+    needs: [update-version, build-linux-binaries, build-native-binaries, build-docker]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
