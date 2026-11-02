@@ -6,7 +6,7 @@ use axum::{
 use base64::{Engine, engine::general_purpose::STANDARD};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
+    net::{TcpListener, TcpSocket, TcpStream},
     time::{Duration, timeout},
 };
 use tower::ServiceExt;
@@ -207,6 +207,60 @@ async fn websocket_origin_rule_on_listener() {
         assert!(String::from_utf8_lossy(&buf[..n]).starts_with(&format!("HTTP/1.1 {expected}")));
     }
     task.abort();
+}
+
+#[tokio::test]
+async fn disconnect_frees_websocket_client_stuck_in_log_replay() {
+    let mut c = config();
+    c.web_auth_enabled = false;
+    let state = State::new(c);
+    for _ in 0..1000 {
+        state.packet("UP->", &[0xab; 4096], "");
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(axum::serve(listener, web::router(state.clone())).into_future());
+
+    let socket = TcpSocket::new_v4().unwrap();
+    socket.set_recv_buffer_size(4096).unwrap();
+    let mut stalled = socket.connect(addr).await.unwrap();
+    stalled.write_all(format!("GET /api/ws HTTP/1.1\r\nHost: {addr}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n").as_bytes()).await.unwrap();
+
+    let web_ids = |state: &State| -> Vec<String> {
+        state.clients()["clients"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|c| c["type"] == "web")
+            .map(|c| c["id"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let mut ids = Vec::new();
+    for _ in 0..100 {
+        ids = web_ids(&state);
+        if !ids.is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(ids.len(), 1, "web client registered");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    assert!(state.disconnect(&ids[0]));
+    let mut freed = false;
+    for _ in 0..200 {
+        if web_ids(&state).is_empty() {
+            freed = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(
+        freed,
+        "a client that stopped reading during log replay must be released by disconnect"
+    );
+    drop(stalled);
+    server.abort();
 }
 
 #[tokio::test]
