@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Security
+- Prevented malicious log messages and packet data from running scripts in the web interface, including when logs are replayed.
+
 ## [2.0.4] - 2026-11-02
 
 ### Fixed
