@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.0.4] - 2026-11-02
 
 ### Fixed
 - IPv4 client addresses now appear without the IPv6-mapped prefix in the client list and logs.
