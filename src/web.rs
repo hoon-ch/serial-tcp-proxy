@@ -2,7 +2,7 @@ mod auth;
 mod static_files;
 mod streams;
 
-use auth::{authenticated, cookie, credentials_match, header};
+use auth::{Caller, authenticated, cookie, credentials_match, header};
 use static_files::asset;
 use streams::{events, websocket};
 
@@ -46,7 +46,12 @@ fn json_response(code: StatusCode, body: Value) -> Response {
 fn unauthorized() -> Response {
     response(StatusCode::UNAUTHORIZED, "Unauthorized\n")
 }
-async fn handle_get(AxumState(s): AxumState<Arc<State>>, headers: HeaderMap, uri: Uri) -> Response {
+async fn handle_get(
+    AxumState(s): AxumState<Arc<State>>,
+    caller: Caller,
+    headers: HeaderMap,
+    uri: Uri,
+) -> Response {
     let headers = &headers;
     let path = uri.path();
     let protected = path.starts_with("/api/")
@@ -54,7 +59,7 @@ async fn handle_get(AxumState(s): AxumState<Arc<State>>, headers: HeaderMap, uri
             path,
             "/api/health" | "/api/auth/check" | "/api/login" | "/api/logout"
         );
-    if protected && !authenticated(headers, &s) {
+    if protected && !authenticated(headers, &s, &caller, true) {
         return unauthorized();
     }
     let c = &s.config;
@@ -68,17 +73,17 @@ async fn handle_get(AxumState(s): AxumState<Arc<State>>, headers: HeaderMap, uri
         "/api/clients" => json_response(StatusCode::OK, s.clients()),
         "/api/auth/check" => json_response(
             StatusCode::OK,
-            json!({"authenticated":!c.web_auth_enabled || s.session_valid(cookie(headers)),"auth_enabled":c.web_auth_enabled}),
+            json!({"authenticated":authenticated(headers, &s, &caller, false),"auth_enabled":c.web_auth_enabled}),
         ),
         "/api/login" | "/api/logout" | "/api/inject" | "/api/clients/disconnect" => {
             response(StatusCode::METHOD_NOT_ALLOWED, "Method not allowed\n")
         }
         _ if !matches!(path, "/login.html" | "/style.css" | "/favicon.png")
-            && !authenticated(headers, &s) =>
+            && !authenticated(headers, &s, &caller, true) =>
         {
             Response::builder()
                 .status(StatusCode::FOUND)
-                .header("location", "/login.html")
+                .header("location", "login.html")
                 .body(Body::empty())
                 .unwrap()
         }
@@ -87,6 +92,7 @@ async fn handle_get(AxumState(s): AxumState<Arc<State>>, headers: HeaderMap, uri
 }
 async fn handle_post(
     AxumState(s): AxumState<Arc<State>>,
+    caller: Caller,
     headers: HeaderMap,
     uri: Uri,
     body: Bytes,
@@ -110,7 +116,7 @@ async fn handle_post(
             path,
             "/api/login" | "/api/logout" | "/api/health" | "/api/auth/check"
         )
-        && !authenticated(headers, &s)
+        && !authenticated(headers, &s, &caller, true)
     {
         return unauthorized();
     }

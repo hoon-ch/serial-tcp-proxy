@@ -10,8 +10,12 @@ impl Drop for Subscription {
         self.state.unsubscribe(self.id, self.web_id.as_deref());
     }
 }
-pub(super) async fn events(AxumState(s): AxumState<Arc<State>>, headers: HeaderMap) -> Response {
-    if !authenticated(&headers, &s) {
+pub(super) async fn events(
+    AxumState(s): AxumState<Arc<State>>,
+    caller: Caller,
+    headers: HeaderMap,
+) -> Response {
+    if !authenticated(&headers, &s, &caller, true) {
         return unauthorized();
     }
     let Some((id, web_id, logs, rx, cancel)) = s.subscribe(false, String::new()) else {
@@ -71,10 +75,14 @@ pub(super) async fn events(AxumState(s): AxumState<Arc<State>>, headers: HeaderM
         .insert("x-content-type-options", "nosniff".parse().unwrap());
     r
 }
-pub(super) async fn websocket(AxumState(s): AxumState<Arc<State>>, request: Request) -> Response {
+pub(super) async fn websocket(
+    AxumState(s): AxumState<Arc<State>>,
+    caller: Caller,
+    request: Request,
+) -> Response {
     let (mut parts, _) = request.into_parts();
     let headers = &parts.headers;
-    if !authenticated(headers, &s) {
+    if !authenticated(headers, &s, &caller, true) {
         return unauthorized();
     }
     let origin = header(headers, "origin");
