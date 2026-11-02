@@ -96,7 +96,7 @@ Access the built-in web interface at `http://localhost:18080`.
 
 ### Login
 
-When authentication is enabled, users are greeted with a styled login page.
+When authentication is enabled, users who open the Web UI on the web port see a styled login page. The Home Assistant sidebar panel skips this page, because Home Assistant has already authenticated the user.
 
 ![Login](docs/images/login.png)
 
