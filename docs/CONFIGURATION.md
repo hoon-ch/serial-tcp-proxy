@@ -13,7 +13,7 @@ Serial TCP Proxy can be configured via environment variables or Home Assistant A
 | `LOG_PACKETS` | Enable packet logging | `false` | No |
 | `LOG_FILE` | Packet log file path | `/data/packets.log` | No |
 | `WEB_PORT` | Web UI port | `18080` | No |
-| `WEB_AUTH_ENABLED` | Enable Web UI authentication | `false` | No |
+| `WEB_AUTH_ENABLED` | Require login for direct Web UI access (Home Assistant ingress is exempt) | `false` | No |
 | `WEB_AUTH_USERNAME` | Basic auth username | - | If auth enabled |
 | `WEB_AUTH_PASSWORD` | Basic auth password | - | If auth enabled |
 
@@ -46,12 +46,14 @@ LOG_FILE=/data/packets.log
 
 Log format:
 ```
-2024-01-15T10:30:50.100Z [PKT] [UP→] f7 0e 11 41 01 01 5e 02 (8 bytes)
-2024-01-15T10:30:50.150Z [PKT] [→UP] f7 0e 11 41 01 00 5f 00 (8 bytes) from client#1
+2024-01-15T10:30:50.100+09:00 [PKT] [UP->] f7 0e 11 41 01 01 5e 02 (8 bytes)
+2024-01-15T10:30:50.150+09:00 [PKT] [->UP] f7 0e 11 41 01 00 5f 00 (8 bytes) from client#1
 ```
 
-- `[UP→]`: Upstream → Clients (broadcast)
-- `[→UP]`: Client → Upstream
+- `[UP->]`: Upstream → Clients (broadcast)
+- `[->UP]`: Client → Upstream
+
+With `LOG_PACKETS=true`, each packet also goes to stdout. The log file has no size limit or rotation. In the Home Assistant add-on it lives in `/data`, so it is included in every add-on backup and makes backups and restores slow. Turn packet logging off when you are not debugging, and use the Web UI Packet Inspector for live traffic.
 
 ### Web UI
 
@@ -68,6 +70,8 @@ WEB_AUTH_ENABLED=true
 WEB_AUTH_USERNAME=admin
 WEB_AUTH_PASSWORD=your-secure-password
 ```
+
+Requests through Home Assistant ingress (the sidebar panel) skip this login, because Home Assistant has already authenticated the user. The add-on recognizes them by the Supervisor's address, `172.30.32.2`.
 
 > **Security Note**: Basic Authentication transmits credentials in Base64 encoding, which is NOT encrypted. When exposing the Web UI outside a trusted network:
 > - Always use HTTPS (TLS)

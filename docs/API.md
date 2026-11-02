@@ -12,11 +12,15 @@ The port can be configured via `WEB_PORT` environment variable.
 
 ## Authentication
 
-When `WEB_AUTH_ENABLED=true`, most endpoints require Basic Authentication.
+When `WEB_AUTH_ENABLED=true`, protected endpoints accept either a session cookie from `POST /api/login` or Basic Authentication.
 
 ```bash
 curl -u admin:password http://localhost:18080/api/status
 ```
+
+Requests that reach the add-on through Home Assistant ingress come from the Supervisor (`172.30.32.2`). Home Assistant has already authenticated those users, so they need neither a session nor Basic Authentication. Unauthenticated page requests redirect to `login.html`, relative to the current path.
+
+Every `POST` request must send `Content-Type: application/json`. Other content types get `415 Unsupported Media Type`.
 
 | Endpoint | Authentication Required |
 |----------|------------------------|
