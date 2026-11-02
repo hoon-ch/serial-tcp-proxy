@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **WebSocket log replay**: The initial status and log replay now use the same 10-second write deadline as live messages and stop on disconnect. Before this fix, a Web UI client that stopped reading during the replay kept its client slot, even after a disconnect from the clients modal. The Go server applied the deadline; the Rust port did not
+
 ## [2.0.1] - 2026-11-02
 
 ### Fixed

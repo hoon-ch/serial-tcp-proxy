@@ -106,9 +106,9 @@ pub(super) async fn websocket(AxumState(s): AxumState<Arc<State>>, request: Requ
     };
     upgrade.on_upgrade(move |mut socket| async move {
         let send = |kind: &str, data: Value| Message::Text(json!({"type":kind,"data":data}).to_string().into());
-        if socket.send(send("status", sub.state.status())).await.is_err() { return; }
+        if !deliver(&mut socket, &mut cancel, send("status", sub.state.status())).await { return; }
         for line in logs {
-            if socket.send(send("log", json!(line))).await.is_err() { return; }
+            if !deliver(&mut socket, &mut cancel, send("log", json!(line))).await { return; }
         }
         let mut ticker = interval_at(Instant::now() + Duration::from_secs(2), Duration::from_secs(2));
         let mut ping = interval_at(Instant::now() + Duration::from_secs(30), Duration::from_secs(30));
@@ -130,7 +130,20 @@ pub(super) async fn websocket(AxumState(s): AxumState<Arc<State>>, request: Requ
                     continue;
                 }
             };
-            if !matches!(tokio::time::timeout(Duration::from_secs(10), socket.send(message)).await, Ok(Ok(()))) { break; }
+            if !deliver(&mut socket, &mut cancel, message).await { break; }
         }
     }).into_response()
+}
+
+// Every send, including the log replay, gets Go's 10 s write deadline and stops on
+// disconnect, so a client that stops reading cannot pin its slot.
+async fn deliver(
+    socket: &mut axum::extract::ws::WebSocket,
+    cancel: &mut tokio::sync::watch::Receiver<bool>,
+    message: Message,
+) -> bool {
+    tokio::select! {
+        sent = tokio::time::timeout(Duration::from_secs(10), socket.send(message)) => matches!(sent, Ok(Ok(()))),
+        _ = cancel.changed() => false,
+    }
 }
