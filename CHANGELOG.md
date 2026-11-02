@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- IPv4 client addresses now appear without the IPv6-mapped prefix in the client list and logs.
+- Authentication attempts and packet log file open failures are logged again.
+
+### Changed
+- Release binaries and container images use a builder image pinned by digest.
+
 ## [2.0.3] - 2026-11-02
 
 ### Fixed
