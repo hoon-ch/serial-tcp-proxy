@@ -1,6 +1,7 @@
 
 import { initTabs, updateStatus, updateUptime } from './modules/ui.js';
 import { addLogEntry, clearLogs } from './modules/logs.js';
+import { parsePacketLine } from './modules/packet-line.js';
 import {
     addPacketEntry,
     clearPackets,
@@ -56,9 +57,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else if (type === 'log') {
             const logLine = typeof data === 'string' ? data : JSON.stringify(data);
-            if (logLine.includes('[PKT]')) {
+            const packet = parsePacketLine(logLine);
+            if (packet) {
                 if (!isPacketsPaused) {
-                    addPacketEntry(logLine);
+                    addPacketEntry(packet);
                 }
             } else {
                 if (!isPaused) {

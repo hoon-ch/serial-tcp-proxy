@@ -19,10 +19,13 @@ export function addLogEntry(logLine) {
 
     entry.classList.add(type);
 
-    entry.innerHTML = `
-        <span class="time">${time}</span>
-        <span class="content">${logLine.substring(parts[0].length + 1)}</span>
-    `;
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'time';
+    timeSpan.textContent = time;
+    const contentSpan = document.createElement('span');
+    contentSpan.className = 'content';
+    contentSpan.textContent = logLine.substring(parts[0].length + 1);
+    entry.append(timeSpan, document.createTextNode(' '), contentSpan);
 
     logsContainer.appendChild(entry);
 

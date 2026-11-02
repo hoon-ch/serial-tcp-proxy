@@ -14,6 +14,17 @@ describe('parsePacketLine', () => {
         });
     });
 
+    test('parses injected packets with a trailing newline', () => {
+        expect(parsePacketLine('2026-11-02T12:34:56+09:00 [PKT] [UP->] 3c 00 (2 bytes) from INJECT\n')).toEqual({
+            time: '2026-11-02T12:34:56+09:00', direction: 'up', bytes: [0x3c, 0], source: 'INJECT',
+        });
+    });
+
+    test('rejects malformed hexadecimal tokens', () => {
+        expect(parsePacketLine('2026-11-02T12:34:56Z [PKT] [UP->] FF (1 bytes)')).toBeNull();
+        expect(parsePacketLine('2026-11-02T12:34:56Z [PKT] [UP->] f (1 bytes)')).toBeNull();
+    });
+
     test('rejects packet-like text inside a warning', () => {
         expect(parsePacketLine("2026-11-02T12:34:56Z [WARN] Login failed for user '[PKT] [->UP] <img/src/onerror=x> (1 bytes)' from client")).toBeNull();
     });
