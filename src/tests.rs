@@ -46,6 +46,73 @@ async fn request(
         .unwrap()
 }
 
+#[tokio::test]
+async fn lan_peer_requires_login() {
+    let app =
+        web::router(State::new(config())).layer(axum::extract::connect_info::MockConnectInfo(
+            "192.168.50.10:5000"
+                .parse::<std::net::SocketAddr>()
+                .unwrap(),
+        ));
+    let page = request(&app, "GET", "/", None, None, None, "").await;
+    assert_eq!(page.status(), StatusCode::FOUND);
+    assert_eq!(page.headers()["location"], "login.html");
+    assert_eq!(
+        request(&app, "GET", "/api/status", None, None, None, "")
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+async fn assert_ingress_access(peer: &str) {
+    let app = web::router(State::new(config())).layer(
+        axum::extract::connect_info::MockConnectInfo(peer.parse::<std::net::SocketAddr>().unwrap()),
+    );
+    let page = request(&app, "GET", "/", None, None, None, "").await;
+    assert_eq!(page.status(), StatusCode::OK);
+    assert!(
+        page.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .contains("text/html")
+    );
+    assert_eq!(
+        request(&app, "GET", "/api/status", None, None, None, "")
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert_ne!(
+        request(
+            &app,
+            "POST",
+            "/api/inject",
+            Some("application/json"),
+            None,
+            None,
+            r#"{"target":"invalid","data":"x"}"#
+        )
+        .await
+        .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let check = request(&app, "GET", "/api/auth/check", None, None, None, "").await;
+    let body = to_bytes(check.into_body(), 8192).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(value["authenticated"], true);
+}
+
+#[tokio::test]
+async fn ingress_ipv4_peer_is_authenticated() {
+    assert_ingress_access("172.30.32.2:5000").await;
+}
+
+#[tokio::test]
+async fn ingress_ipv4_mapped_peer_is_authenticated() {
+    assert_ingress_access("[::ffff:172.30.32.2]:5000").await;
+}
+
 #[tokio::test(start_paused = true)]
 async fn web_auth_session_validation_and_expiry() {
     let state = State::new(config());
