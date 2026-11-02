@@ -14,9 +14,11 @@ pub(super) async fn events(
     AxumState(s): AxumState<Arc<State>>,
     caller: Caller,
     headers: HeaderMap,
+    method: Method,
+    uri: Uri,
 ) -> Response {
     if !authenticated(&headers, &s, &caller, true) {
-        return unauthorized();
+        return unauthorized(&s, &caller, method.as_str(), uri.path());
     }
     let Some((id, web_id, logs, rx, cancel)) = s.subscribe(false, String::new()) else {
         return response(StatusCode::SERVICE_UNAVAILABLE, "Max clients reached\n");
@@ -83,7 +85,7 @@ pub(super) async fn websocket(
     let (mut parts, _) = request.into_parts();
     let headers = &parts.headers;
     if !authenticated(headers, &s, &caller, true) {
-        return unauthorized();
+        return unauthorized(&s, &caller, parts.method.as_str(), parts.uri.path());
     }
     let origin = header(headers, "origin");
     if !origin.is_empty()

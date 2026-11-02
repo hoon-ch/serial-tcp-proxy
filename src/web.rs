@@ -14,7 +14,7 @@ use axum::{
         FromRequestParts, Request, State as AxumState,
         ws::{Message, WebSocketUpgrade},
     },
-    http::{HeaderMap, StatusCode, Uri},
+    http::{HeaderMap, Method, StatusCode, Uri},
     response::{
         IntoResponse, Response,
         sse::{Event, Sse},
@@ -43,13 +43,21 @@ fn json_response(code: StatusCode, body: Value) -> Response {
         .body(Body::from(format!("{body}\n")))
         .unwrap()
 }
-fn unauthorized() -> Response {
+fn unauthorized(s: &State, caller: &Caller, method: &str, path: &str) -> Response {
+    s.info(
+        "WARN",
+        &format!(
+            "Authentication failed: {method} {path} from {}",
+            caller.addr()
+        ),
+    );
     response(StatusCode::UNAUTHORIZED, "Unauthorized\n")
 }
 async fn handle_get(
     AxumState(s): AxumState<Arc<State>>,
     caller: Caller,
     headers: HeaderMap,
+    method: Method,
     uri: Uri,
 ) -> Response {
     let headers = &headers;
@@ -60,7 +68,7 @@ async fn handle_get(
             "/api/health" | "/api/auth/check" | "/api/login" | "/api/logout"
         );
     if protected && !authenticated(headers, &s, &caller, true) {
-        return unauthorized();
+        return unauthorized(&s, &caller, method.as_str(), path);
     }
     let c = &s.config;
     match path {
@@ -118,7 +126,7 @@ async fn handle_post(
         )
         && !authenticated(headers, &s, &caller, true)
     {
-        return unauthorized();
+        return unauthorized(&s, &caller, "POST", path);
     }
     if path == "/api/logout" {
         s.remove_session(cookie(headers));
@@ -154,6 +162,14 @@ async fn handle_post(
     match path {
         "/api/login" => {
             if !credentials_match(&s, text("username"), text("password")) {
+                s.info(
+                    "WARN",
+                    &format!(
+                        "Login failed for user '{}' from {}",
+                        text("username"),
+                        caller.addr()
+                    ),
+                );
                 json_response(
                     StatusCode::UNAUTHORIZED,
                     json!({"error":"Invalid username or password"}),
@@ -171,6 +187,14 @@ async fn handle_post(
                     format!("session_token={token}; Path=/; Max-Age=86400; HttpOnly; SameSite=Lax")
                         .parse()
                         .unwrap(),
+                );
+                s.info(
+                    "INFO",
+                    &format!(
+                        "User '{}' logged in from {}",
+                        text("username"),
+                        caller.addr()
+                    ),
                 );
                 r
             }

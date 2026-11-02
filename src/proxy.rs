@@ -64,17 +64,19 @@ pub struct State {
 }
 impl State {
     pub fn new(config: Config) -> Arc<Self> {
-        let file = if config.log_packets && !config.log_file.is_empty() {
-            OpenOptions::new()
+        let (file, file_error) = if config.log_packets && !config.log_file.is_empty() {
+            match OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open(&config.log_file)
-                .ok()
-                .map(|f| BufWriter::with_capacity(4096, f))
+            {
+                Ok(file) => (Some(BufWriter::with_capacity(4096, file)), None),
+                Err(error) => (None, Some(error)),
+            }
         } else {
-            None
+            (None, None)
         };
-        Arc::new(Self {
+        let state = Arc::new(Self {
             config,
             start: Instant::now(),
             start_time: timestamp(),
@@ -93,7 +95,17 @@ impl State {
             next_tcp: AtomicU64::new(0),
             next_web: AtomicU64::new(0),
             upstream: AsyncMutex::new(None),
-        })
+        });
+        if let Some(error) = file_error {
+            state.info(
+                "WARN",
+                &format!(
+                    "Failed to open log file {}: {error}, packet logging to file disabled",
+                    state.config.log_file
+                ),
+            );
+        }
+        state
     }
     pub fn info(&self, level: &str, msg: &str) {
         let line = format!("{} [{}] {}\n", timestamp_nano(), level, msg);
